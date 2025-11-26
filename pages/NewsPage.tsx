@@ -8,7 +8,11 @@ const NewsPage: React.FC = () => {
   const [newsList, setNewsList] = useState<NewsItem[]>([]);
 
   useEffect(() => {
-    setNewsList(getNews());
+    const loadNews = async () => {
+        const news = await getNews();
+        setNewsList(news);
+    };
+    loadNews();
   }, []);
 
   return (

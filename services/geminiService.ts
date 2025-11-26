@@ -1,59 +1,38 @@
-// services/geminiService.ts (o el nombre que tenga este archivo)
-
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
-type ChatMessage = {
-  role: string;
-  text: string;
-};
+// Initialize with a check. In a real app, this would be process.env.API_KEY
+// We use a safe check for process to avoid ReferenceError in browser environments that don't polyfill it.
+const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) || '';
 
-// En Vite, las variables públicas deben empezar por VITE_
-// Usamos (import.meta as any) para que TypeScript no se queje en el build.
-const apiKey =
-  (((import.meta as any).env?.VITE_GEMINI_API_KEY as string | undefined) ??
-    "").trim();
+const ai = new GoogleGenAI({ apiKey });
 
-if (!apiKey) {
-  console.warn(
-    "VITE_GEMINI_API_KEY no está configurada. El asistente de Gemini no podrá responder en producción."
-  );
-}
-
-const MODEL_ID = "gemini-2.5-flash";
-
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-
-export const sendMessageToGemini = async (
-  history: ChatMessage[],
-  newMessage: string
-): Promise<string> => {
-  if (!apiKey || !genAI) {
+export const sendMessageToGemini = async (history: { role: string, text: string }[], newMessage: string): Promise<string> => {
+  if (!apiKey) {
     return "Lo siento, no se ha configurado la API Key de demostración. Por favor contacta al administrador del sistema.";
   }
 
   try {
-    // getGenerativeModel del SDK oficial
-    const model = genAI.getGenerativeModel({
-      model: MODEL_ID,
-      systemInstruction: SYSTEM_INSTRUCTION,
-    } as any); // cast para evitar error de tipos con systemInstruction
-
-    // Convertimos el historial al formato del SDK
-    const chat = model.startChat({
-      history: history.map((h) => ({
+    const model = "gemini-2.5-flash";
+    
+    // Transform history to the format expected by the SDK
+    const chat = ai.chats.create({
+      model: model,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+      },
+      history: history.map(h => ({
         role: h.role,
-        parts: [{ text: h.text }],
-      })),
+        parts: [{ text: h.text }]
+      }))
     });
 
-    const result = await chat.sendMessage(newMessage);
-    const responseText = result.response.text();
+    const response = await chat.sendMessage({
+      message: newMessage
+    });
 
-    return (
-      responseText ||
-      "Lo siento, no pude generar una respuesta en este momento."
-    );
+    return response.text || "Lo siento, no pude generar una respuesta en este momento.";
+
   } catch (error) {
     console.error("Error calling Gemini:", error);
     return "Hubo un error al conectar con el asistente. Por favor intenta más tarde.";

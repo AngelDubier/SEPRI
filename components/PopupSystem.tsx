@@ -7,15 +7,18 @@ const PopupSystem: React.FC = () => {
   const [activePopups, setActivePopups] = useState<PopupConfig[]>([]);
 
   useEffect(() => {
-    // Check for enabled popups
-    const allPopups = getPopups();
-    const enabled = allPopups.filter(p => p.isEnabled);
-    
-    // Filter out ones user has dismissed in this session (optional, using session storage)
-    const sessionDismissed = JSON.parse(sessionStorage.getItem('sepri_dismissed_popups') || '[]');
-    const toShow = enabled.filter(p => !sessionDismissed.includes(p.id));
+    const loadPopups = async () => {
+      // Check for enabled popups
+      const allPopups = await getPopups();
+      const enabled = allPopups.filter(p => p.isEnabled);
+      
+      // Filter out ones user has dismissed in this session (optional, using session storage)
+      const sessionDismissed = JSON.parse(sessionStorage.getItem('sepri_dismissed_popups') || '[]');
+      const toShow = enabled.filter(p => !sessionDismissed.includes(p.id));
 
-    setActivePopups(toShow);
+      setActivePopups(toShow);
+    };
+    loadPopups();
   }, []);
 
   const dismissPopup = (id: string) => {

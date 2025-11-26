@@ -10,8 +10,14 @@ const Footer: React.FC = () => {
   const [contactInfo, setContactInfo] = useState<ContactInfo>(DEFAULT_CONTACT_INFO);
 
   useEffect(() => {
-    setLinks(getQuickLinks().filter(l => l.isEnabled));
-    setContactInfo(getContactInfo());
+    const fetchData = async () => {
+      const fetchedLinks = await getQuickLinks();
+      setLinks(fetchedLinks.filter(l => l.isEnabled));
+      
+      const fetchedContact = await getContactInfo();
+      if(fetchedContact) setContactInfo(fetchedContact);
+    };
+    fetchData();
   }, []);
 
   return (

@@ -1,43 +1,27 @@
 import { EventType, NewsItem, PopupConfig, FormTemplate, Step, QuickLink, ContactInfo, UserAccount, UserRole } from '../types';
-import { EVENTS_DATA, NEWS_DATA, DEFAULT_POPUPS, DEFAULT_FORMS, DEFAULT_QUICK_LINKS, DEFAULT_CONTACT_INFO, ADMIN_CREDENTIALS, CREATOR_CREDENTIALS } from '../constants';
+import { 
+  ADMIN_CREDENTIALS, 
+  CREATOR_CREDENTIALS,
+  NEWS_DATA,
+  EVENTS_DATA,
+  DEFAULT_POPUPS,
+  DEFAULT_FORMS,
+  DEFAULT_QUICK_LINKS,
+  DEFAULT_CONTACT_INFO
+} from '../constants';
 
-// Keys for Local Storage
 const KEYS = {
+  USERS: 'sepri_users',
   EVENTS: 'sepri_events',
   NEWS: 'sepri_news',
   POPUPS: 'sepri_popups',
   FORMS: 'sepri_forms',
   QUICK_LINKS: 'sepri_quick_links',
-  CONTACT: 'sepri_contact',
-  USERS: 'sepri_users'
+  CONTACT: 'sepri_contact'
 };
 
-// Helper for safe JSON parsing
-const safeParse = <T>(key: string, fallback: T): T => {
-  try {
-    const stored = localStorage.getItem(key);
-    if (!stored) return fallback;
-    return JSON.parse(stored);
-  } catch (e) {
-    console.error(`Error parsing ${key} from localStorage`, e);
-    return fallback;
-  }
-};
+// --- USER AUTH (LOCAL ONLY) ---
 
-// Helper for safe setting
-const safeSet = (key: string, value: any) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) {
-    console.error(`Error saving ${key} to localStorage`, e);
-    alert("Error al guardar datos. Es posible que el almacenamiento esté lleno. Intenta usar imágenes más pequeñas o limpiar datos.");
-  }
-};
-
-// --- SECURITY & USER MANAGEMENT ---
-
-// Simple SHA-256 hash function using Web Crypto API
-// Includes fallback for non-secure contexts (http) where crypto.subtle is undefined
 async function hashPassword(password: string): Promise<string> {
   if (window.crypto && window.crypto.subtle) {
     try {
@@ -46,22 +30,17 @@ async function hashPassword(password: string): Promise<string> {
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     } catch (e) {
-      console.warn("Crypto subtle failed, falling back to simple hash", e);
+      console.warn("Crypto subtle failed", e);
     }
   }
-  
-  // Fallback for non-secure environments (Development/Preview)
-  // NOTE: In production, always use HTTPS.
   let hash = 0;
   for (let i = 0; i < password.length; i++) {
-    const char = password.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = ((hash << 5) - hash) + password.charCodeAt(i);
+    hash = hash & hash;
   }
   return "insecure_hash_" + Math.abs(hash).toString(16);
 }
 
-// Generate a secure random password
 function generateSecurePassword(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+";
   let password = "";
@@ -71,45 +50,38 @@ function generateSecurePassword(): string {
   return password;
 }
 
+const getLocal = <T>(key: string, defaultVal: T): T => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultVal;
+  } catch {
+    return defaultVal;
+  }
+};
+
+const setLocal = (key: string, val: any) => {
+  localStorage.setItem(key, JSON.stringify(val));
+};
+
 export const initUsers = async () => {
   const existingUsers = localStorage.getItem(KEYS.USERS);
   if (!existingUsers) {
     const adminHash = await hashPassword(ADMIN_CREDENTIALS.password);
     const creatorHash = await hashPassword(CREATOR_CREDENTIALS.password);
-
     const initialUsers: UserAccount[] = [
-      {
-        id: 'user-admin',
-        name: 'Administrador SEPRI',
-        email: ADMIN_CREDENTIALS.username,
-        passwordHash: adminHash,
-        role: 'ADMIN'
-      },
-      {
-        id: 'user-creator',
-        name: 'Creador del Sistema',
-        email: CREATOR_CREDENTIALS.username,
-        passwordHash: creatorHash,
-        role: 'CREATOR'
-      }
+      { id: 'user-admin', name: 'Administrador SEPRI', email: ADMIN_CREDENTIALS.username, passwordHash: adminHash, role: 'ADMIN' },
+      { id: 'user-creator', name: 'Creador del Sistema', email: CREATOR_CREDENTIALS.username, passwordHash: creatorHash, role: 'CREATOR' }
     ];
-    safeSet(KEYS.USERS, initialUsers);
+    setLocal(KEYS.USERS, initialUsers);
   }
 };
 
-export const getUsers = (): UserAccount[] => {
-  return safeParse<UserAccount[]>(KEYS.USERS, []);
-};
+export const getUsers = (): UserAccount[] => getLocal(KEYS.USERS, []);
 
 export const authenticateUser = async (email: string, passwordPlain: string): Promise<UserRole | null> => {
-  // Ensure users are initialized
-  if (!localStorage.getItem(KEYS.USERS)) {
-    await initUsers();
-  }
-  
+  if (!localStorage.getItem(KEYS.USERS)) await initUsers();
   const users = getUsers();
   const inputHash = await hashPassword(passwordPlain);
-  
   const user = users.find(u => u.email === email && u.passwordHash === inputHash);
   return user ? user.role : null;
 };
@@ -118,164 +90,123 @@ export const resetUserPassword = async (userId: string): Promise<string | null> 
   try {
     const users = getUsers();
     const index = users.findIndex(u => u.id === userId);
-    
     if (index !== -1) {
       const newPassword = generateSecurePassword();
-      const newHash = await hashPassword(newPassword);
-      
-      users[index].passwordHash = newHash;
-      saveUsers(users); // Persist immediately
-      
-      return newPassword; // Return plain text ONLY ONCE to show to admin
+      users[index].passwordHash = await hashPassword(newPassword);
+      setLocal(KEYS.USERS, users);
+      return newPassword;
     }
-  } catch (error) {
-    console.error("Error resetting password:", error);
-    return null;
-  }
+  } catch (error) { console.error(error); }
   return null;
 };
 
-export const saveUsers = (users: UserAccount[]) => {
-  safeSet(KEYS.USERS, users);
-};
+export const saveUsers = (users: UserAccount[]) => setLocal(KEYS.USERS, users);
 
+// --- HYBRID DATA MANAGEMENT (BACKEND + LOCAL FALLBACK) ---
 
-// --- EVENTS & STEPS ---
-
-export const getEvents = (): EventType[] => {
-  return safeParse<EventType[]>(KEYS.EVENTS, EVENTS_DATA);
-};
-
-export const saveEvents = (events: EventType[]) => {
-  safeSet(KEYS.EVENTS, events);
-};
-
-export const addEvent = (event: EventType) => {
-  const events = getEvents();
-  events.push(event);
-  saveEvents(events);
-};
-
-export const deleteEvent = (id: string) => {
-  const events = getEvents().filter(e => e.id !== id);
-  saveEvents(events);
-};
-
-export const updateEventStep = (eventId: string, updatedStep: Step) => {
-  const events = getEvents();
-  const eventIndex = events.findIndex(e => e.id === eventId);
-  if (eventIndex === -1) return;
-
-  const steps = events[eventIndex].baseSteps;
-  const stepIndex = steps.findIndex(s => s.id === updatedStep.id);
-
-  if (stepIndex !== -1) {
-    // Update existing
-    steps[stepIndex] = updatedStep;
-  } else {
-    // Add new (simulated for custom steps if integrated into base)
-    steps.push(updatedStep);
-  }
-  
-  events[eventIndex].baseSteps = steps;
-  saveEvents(events);
-};
-
-// --- NEWS ---
-
-export const getNews = (): NewsItem[] => {
-  return safeParse<NewsItem[]>(KEYS.NEWS, NEWS_DATA);
-};
-
-export const saveNews = (news: NewsItem[]) => {
-  safeSet(KEYS.NEWS, news);
-};
-
-// --- POPUPS ---
-
-export const getPopups = (): PopupConfig[] => {
-  return safeParse<PopupConfig[]>(KEYS.POPUPS, DEFAULT_POPUPS);
-};
-
-export const savePopups = (popups: PopupConfig[]) => {
-  safeSet(KEYS.POPUPS, popups);
-};
-
-export const togglePopup = (id: string, isEnabled: boolean) => {
-  const popups = getPopups();
-  const index = popups.findIndex(p => p.id === id);
-  if (index !== -1) {
-    popups[index].isEnabled = isEnabled;
-    savePopups(popups);
-  }
-};
-
-export const updatePopup = (updatedPopup: PopupConfig) => {
-  const popups = getPopups();
-  const index = popups.findIndex(p => p.id === updatedPopup.id);
-  if (index !== -1) {
-    popups[index] = updatedPopup;
-    savePopups(popups);
-  }
-};
-
-// --- FORMS ---
-
-export const getForms = (): FormTemplate[] => {
-  return safeParse<FormTemplate[]>(KEYS.FORMS, DEFAULT_FORMS);
-};
-
-export const saveForms = (forms: FormTemplate[]) => {
-  safeSet(KEYS.FORMS, forms);
-};
-
-export const addForm = (form: FormTemplate) => {
-  const forms = getForms();
-  forms.push(form);
-  saveForms(forms);
-};
-
-export const deleteForm = (formId: string) => {
-  const forms = getForms().filter(f => f.id !== formId);
-  saveForms(forms);
-};
-
-// --- QUICK LINKS ---
-
-export const getQuickLinks = (): QuickLink[] => {
-  return safeParse<QuickLink[]>(KEYS.QUICK_LINKS, DEFAULT_QUICK_LINKS);
-};
-
-export const saveQuickLinks = (links: QuickLink[]) => {
-  safeSet(KEYS.QUICK_LINKS, links);
-};
-
-export const addQuickLink = (link: QuickLink) => {
-  const links = getQuickLinks();
-  links.push(link);
-  saveQuickLinks(links);
-};
-
-export const deleteQuickLink = (id: string) => {
-  const links = getQuickLinks().filter(l => l.id !== id);
-  saveQuickLinks(links);
-};
-
-export const updateQuickLink = (link: QuickLink) => {
-    const links = getQuickLinks();
-    const index = links.findIndex(l => l.id === link.id);
-    if (index !== -1) {
-        links[index] = link;
-        saveQuickLinks(links);
+async function getHybridData<T>(endpoint: string, key: string, defaultData: T): Promise<T> {
+  try {
+    const response = await fetch(`/.netlify/functions/${endpoint}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data as T;
     }
+  } catch (e) {
+    console.warn(`Backend no disponible para ${endpoint}`, e);
+  }
+  // Si el backend falla, usamos SOLO los defaults, NO el localStorage
+  return defaultData;
+}
+
+async function saveHybridData<T>(endpoint: string, key: string, data: T): Promise<void> {
+  try {
+    const res = await fetch(`/.netlify/functions/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      alert(`No se pudo guardar ${endpoint} en el servidor.`);
+    }
+  } catch (e) {
+    console.warn(`Error al sincronizar ${endpoint} con el backend`, e);
+    alert(`No se pudo guardar ${endpoint}. Revisa tu conexión.`);
+  }
+}
+
+// EVENTS
+export const getEvents = () => getHybridData('events', KEYS.EVENTS, EVENTS_DATA);
+export const saveEvents = (data: EventType[]) => saveHybridData('events', KEYS.EVENTS, data);
+export const addEvent = async (event: EventType) => {
+  const items = await getEvents();
+  items.push(event);
+  await saveEvents(items);
+};
+export const deleteEvent = async (id: string) => {
+  let items = await getEvents();
+  items = items.filter(i => i.id !== id);
+  await saveEvents(items);
+};
+export const updateEventStep = async (eventId: string, updatedStep: Step) => {
+  const events = await getEvents();
+  const event = events.find(e => e.id === eventId);
+  if (event) {
+    const idx = event.baseSteps.findIndex(s => s.id === updatedStep.id);
+    if (idx !== -1) event.baseSteps[idx] = updatedStep;
+    else event.baseSteps.push(updatedStep);
+    await saveEvents(events);
+  }
 };
 
-// --- CONTACT INFO ---
+// NEWS
+export const getNews = () => getHybridData('news', KEYS.NEWS, NEWS_DATA);
+export const saveNews = (data: NewsItem[]) => saveHybridData('news', KEYS.NEWS, data);
 
-export const getContactInfo = (): ContactInfo => {
-  return safeParse<ContactInfo>(KEYS.CONTACT, DEFAULT_CONTACT_INFO);
+// POPUPS
+export const getPopups = () => getHybridData('popups', KEYS.POPUPS, DEFAULT_POPUPS);
+export const savePopups = (data: PopupConfig[]) => saveHybridData('popups', KEYS.POPUPS, data);
+export const togglePopup = async (id: string, isEnabled: boolean) => {
+  const items = await getPopups();
+  const item = items.find(i => i.id === id);
+  if (item) { item.isEnabled = isEnabled; await savePopups(items); }
+};
+export const updatePopup = async (updated: PopupConfig) => {
+  const items = await getPopups();
+  const idx = items.findIndex(i => i.id === updated.id);
+  if (idx !== -1) { items[idx] = updated; await savePopups(items); }
 };
 
-export const saveContactInfo = (info: ContactInfo) => {
-  safeSet(KEYS.CONTACT, info);
+// FORMS
+export const getForms = () => getHybridData('forms', KEYS.FORMS, DEFAULT_FORMS);
+export const saveForms = (data: FormTemplate[]) => saveHybridData('forms', KEYS.FORMS, data);
+export const addForm = async (form: FormTemplate) => {
+  const items = await getForms();
+  items.push(form);
+  await saveForms(items);
 };
+export const deleteForm = async (id: string) => {
+  const items = await getForms();
+  await saveForms(items.filter(i => i.id !== id));
+};
+
+// QUICK LINKS
+export const getQuickLinks = () => getHybridData('quickLinks', KEYS.QUICK_LINKS, DEFAULT_QUICK_LINKS);
+export const saveQuickLinks = (data: QuickLink[]) => saveHybridData('quickLinks', KEYS.QUICK_LINKS, data);
+export const addQuickLink = async (link: QuickLink) => {
+  const items = await getQuickLinks();
+  items.push(link);
+  await saveQuickLinks(items);
+};
+export const deleteQuickLink = async (id: string) => {
+  const items = await getQuickLinks();
+  await saveQuickLinks(items.filter(i => i.id !== id));
+};
+export const updateQuickLink = async (link: QuickLink) => {
+  const items = await getQuickLinks();
+  const idx = items.findIndex(i => i.id === link.id);
+  if (idx !== -1) { items[idx] = link; await saveQuickLinks(items); }
+};
+
+// CONTACT
+export const getContactInfo = () => getHybridData('contact', KEYS.CONTACT, DEFAULT_CONTACT_INFO);
+export const saveContactInfo = (data: ContactInfo) => saveHybridData('contact', KEYS.CONTACT, data);

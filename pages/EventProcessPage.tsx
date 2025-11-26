@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Download, CheckCircle, AlertCircle, FileText, Plus, Save, Clock, Edit2, File } from 'lucide-react';
 import { EXTRA_STEPS } from '../constants';
-import { Step, UserRole, FormTemplate } from '../types';
+import { Step, UserRole, FormTemplate, EventType } from '../types';
 import { getEvents, updateEventStep, getForms } from '../services/dataService';
 
 const EventProcessPage: React.FC = () => {
@@ -11,29 +11,36 @@ const EventProcessPage: React.FC = () => {
   const [currentSteps, setCurrentSteps] = useState<Step[]>([]);
   const [downloadedItems, setDownloadedItems] = useState<Set<string>>(new Set());
   
+  // Data State
+  const [event, setEvent] = useState<EventType | null>(null);
+  const [loading, setLoading] = useState(true);
+
   // Admin Management State
   const [userRole, setUserRole] = useState<UserRole>('USER');
-  const [editingStep, setEditingStep] = useState<Step | null>(null); // For Editing existing steps
+  const [editingStep, setEditingStep] = useState<Step | null>(null);
   
   // Forms State
   const [availableForms, setAvailableForms] = useState<FormTemplate[]>([]);
   const [activeForm, setActiveForm] = useState<FormTemplate | null>(null);
   const [formResponses, setFormResponses] = useState<Record<string, string>>({});
 
-  // Fetch Event Data from Service (to support Admin edits)
-  const allEvents = getEvents();
-  const event = allEvents.find(e => e.id === id);
-
-  // Load User Role
+  // Load Data
   useEffect(() => {
-    const storedRole = localStorage.getItem('sepri_user_role') as UserRole;
-    if (storedRole) setUserRole(storedRole);
-    
-    // Load available forms for this event
-    if (id) {
-      const allForms = getForms();
-      setAvailableForms(allForms.filter(f => f.eventId === id));
-    }
+    const loadData = async () => {
+        const storedRole = localStorage.getItem('sepri_user_role') as UserRole;
+        if (storedRole) setUserRole(storedRole);
+
+        if (id) {
+            const allEvents = await getEvents();
+            const foundEvent = allEvents.find(e => e.id === id);
+            setEvent(foundEvent || null);
+
+            const allForms = await getForms();
+            setAvailableForms(allForms.filter(f => f.eventId === id));
+        }
+        setLoading(false);
+    };
+    loadData();
   }, [id]);
 
   // Logic to calculate steps
@@ -58,6 +65,10 @@ const EventProcessPage: React.FC = () => {
 
     setCurrentSteps(steps);
   }, [answers, event]);
+
+  if (loading) {
+      return <div className="min-h-screen flex justify-center items-center">Cargando...</div>;
+  }
 
   if (!event) {
     return (
@@ -95,22 +106,23 @@ const EventProcessPage: React.FC = () => {
 
   // --- Admin Functions ---
 
-  const handleSaveStep = (step: Step) => {
+  const handleSaveStep = async (step: Step) => {
     if (!step.title) {
         alert("El título del ítem es obligatorio.");
         return;
     }
     
-    // Validate URL if present
     if (step.downloadUrl && !step.downloadUrl.match(/^https?:\/\//)) {
-        alert("La URL debe comenzar con http:// o https:// (Ejemplo: https://drive.google.com/...)");
+        alert("La URL debe comenzar con http:// o https://");
         return;
     }
 
-    updateEventStep(event.id, step);
+    await updateEventStep(event.id, step);
     setEditingStep(null);
-    // Force reload handled by the parent/state update via service get
-    window.location.reload(); // Simple reload to refresh state from storage for this demo
+    // Reload data
+    const allEvents = await getEvents();
+    const foundEvent = allEvents.find(e => e.id === id);
+    setEvent(foundEvent || null);
   };
 
   const canManage = userRole === 'ADMIN' || userRole === 'CREATOR';

@@ -20,9 +20,13 @@ const Home: React.FC = () => {
   const [isHovering, setIsHovering] = useState(false);
 
   useEffect(() => {
-    // Fetch more news items to allow scrolling
-    setNews(getNews().slice(0, 8)); 
-    setEvents(getEvents());
+    const fetchData = async () => {
+        const fetchedNews = await getNews();
+        setNews(fetchedNews.slice(0, 8));
+        const fetchedEvents = await getEvents();
+        setEvents(fetchedEvents);
+    };
+    fetchData();
   }, []);
 
   // Animation Loop for Carousel

@@ -62,15 +62,17 @@ const AdminLogin: React.FC = () => {
     }
   }, []);
 
-  const loadData = () => {
-    setNews(getNews());
-    setPopups(getPopups());
-    setForms(getForms());
-    setEvents(getEvents());
-    setQuickLinks(getQuickLinks());
-    setContactInfo(getContactInfo());
+  const loadData = async () => {
+    setNews(await getNews());
+    setPopups(await getPopups());
+    setForms(await getForms());
+    setEvents(await getEvents());
+    setQuickLinks(await getQuickLinks());
+    const contact = await getContactInfo();
+    if(contact) setContactInfo(contact);
+    
     if (currentRole === 'CREATOR') {
-      setUsers(getUsers());
+      setUsers(getUsers()); // Still local for now per instructions
     }
   };
   
@@ -153,7 +155,7 @@ const AdminLogin: React.FC = () => {
     }
   };
 
-  const handleSaveNews = () => {
+  const handleSaveNews = async () => {
     if (!currentNews.title || !currentNews.summary) return;
     
     let updatedNews = [...news];
@@ -171,22 +173,22 @@ const AdminLogin: React.FC = () => {
       updatedNews.unshift(newItem);
     }
     
-    saveNews(updatedNews);
+    await saveNews(updatedNews);
     setNews(updatedNews);
     setIsEditingNews(false);
     setCurrentNews({});
   };
 
-  const handleDeleteNews = (id: string) => {
+  const handleDeleteNews = async (id: string) => {
     if (confirm('¿Eliminar esta noticia?')) {
       const updated = news.filter(n => n.id !== id);
-      saveNews(updated);
+      await saveNews(updated);
       setNews(updated);
     }
   };
 
   // --- PROTOCOLS (EVENTS) MANAGEMENT ---
-  const handleSaveProtocol = () => {
+  const handleSaveProtocol = async () => {
     if (!currentProtocol.title?.trim() || !currentProtocol.description?.trim()) {
       alert("Título y descripción requeridos");
       return;
@@ -208,26 +210,26 @@ const AdminLogin: React.FC = () => {
       if (currentProtocol.id) {
         // Update
         const updatedEvents = events.map(e => e.id === currentProtocol.id ? protocolToSave : e);
-        saveEvents(updatedEvents);
+        await saveEvents(updatedEvents);
         setEvents(updatedEvents);
       } else {
         // Create
-        addEvent(protocolToSave);
-        setEvents(getEvents());
+        await addEvent(protocolToSave);
+        setEvents(await getEvents());
       }
       setIsEditingProtocol(false);
       setCurrentProtocol({ baseSteps: [], questions: [] });
       alert("Protocolo guardado exitosamente.");
     } catch (error) {
       console.error("Error saving protocol:", error);
-      alert("Error al guardar: Es posible que la imagen sea muy pesada. Intenta con una imagen más liviana.");
+      alert("Error al guardar: Es posible que la imagen sea muy pesada o hubo un error de conexión.");
     }
   };
 
-  const handleDeleteProtocol = (id: string) => {
+  const handleDeleteProtocol = async (id: string) => {
     if (confirm('¿Eliminar este protocolo completo y todos sus datos?')) {
-      deleteEvent(id);
-      setEvents(getEvents());
+      await deleteEvent(id);
+      setEvents(await getEvents());
     }
   };
 
@@ -325,9 +327,9 @@ const AdminLogin: React.FC = () => {
   };
 
   // --- POPUP MANAGEMENT ---
-  const handleTogglePopup = (id: string, currentStatus: boolean) => {
-    togglePopup(id, !currentStatus);
-    setPopups(getPopups()); // Reload
+  const handleTogglePopup = async (id: string, currentStatus: boolean) => {
+    await togglePopup(id, !currentStatus);
+    setPopups(await getPopups()); // Reload
   };
 
   const startEditingPopup = (popup: PopupConfig) => {
@@ -340,10 +342,10 @@ const AdminLogin: React.FC = () => {
     setTempPopupData({});
   };
 
-  const saveEditingPopup = () => {
+  const saveEditingPopup = async () => {
     if (editingPopupId && tempPopupData.title && tempPopupData.content && tempPopupData.type) {
-      updatePopup({ ...tempPopupData } as PopupConfig);
-      setPopups(getPopups());
+      await updatePopup({ ...tempPopupData } as PopupConfig);
+      setPopups(await getPopups());
       setEditingPopupId(null);
       setTempPopupData({});
     }
@@ -362,7 +364,7 @@ const AdminLogin: React.FC = () => {
     setNewField({ label: '', type: 'text' });
   };
 
-  const handleSaveForm = () => {
+  const handleSaveForm = async () => {
     if (!newForm.title || !newForm.eventId) {
       alert("Debes asignar un título y un evento al formulario");
       return;
@@ -374,21 +376,21 @@ const AdminLogin: React.FC = () => {
       description: newForm.description,
       fields: newForm.fields || []
     };
-    addForm(template);
-    setForms(getForms());
+    await addForm(template);
+    setForms(await getForms());
     setIsCreatingForm(false);
     setNewForm({ title: '', fields: [] });
   };
 
-  const handleDeleteForm = (id: string) => {
+  const handleDeleteForm = async (id: string) => {
     if (confirm('¿Eliminar este formulario?')) {
-      deleteForm(id);
-      setForms(getForms());
+      await deleteForm(id);
+      setForms(await getForms());
     }
   };
 
   // --- QUICK LINKS MANAGEMENT ---
-  const handleSaveQuickLink = () => {
+  const handleSaveQuickLink = async () => {
     if (!newLink.title || !newLink.url) return;
     const link: QuickLink = {
         id: `ql-${Date.now()}`,
@@ -396,23 +398,23 @@ const AdminLogin: React.FC = () => {
         url: newLink.url,
         isEnabled: true
     };
-    addQuickLink(link);
-    setQuickLinks(getQuickLinks());
+    await addQuickLink(link);
+    setQuickLinks(await getQuickLinks());
     setNewLink({ title: '', url: '' });
   };
 
-  const handleDeleteQuickLink = (id: string) => {
+  const handleDeleteQuickLink = async (id: string) => {
       if (confirm("¿Eliminar este enlace?")) {
-          deleteQuickLink(id);
-          setQuickLinks(getQuickLinks());
+          await deleteQuickLink(id);
+          setQuickLinks(await getQuickLinks());
       }
   };
   
-  const handleToggleQuickLink = (id: string) => {
+  const handleToggleQuickLink = async (id: string) => {
       const link = quickLinks.find(l => l.id === id);
       if (link) {
-          updateQuickLink({ ...link, isEnabled: !link.isEnabled });
-          setQuickLinks(getQuickLinks());
+          await updateQuickLink({ ...link, isEnabled: !link.isEnabled });
+          setQuickLinks(await getQuickLinks());
       }
   };
 
@@ -427,18 +429,18 @@ const AdminLogin: React.FC = () => {
     setTempLinkData({});
   };
 
-  const saveEditingLink = () => {
+  const saveEditingLink = async () => {
     if (editingLinkId && tempLinkData.title && tempLinkData.url) {
-       updateQuickLink({ ...tempLinkData } as QuickLink);
-       setQuickLinks(getQuickLinks());
+       await updateQuickLink({ ...tempLinkData } as QuickLink);
+       setQuickLinks(await getQuickLinks());
        setEditingLinkId(null);
        setTempLinkData({});
     }
   };
 
   // --- CONTACT CONFIG MANAGEMENT ---
-  const handleSaveContactInfo = () => {
-    saveContactInfo(contactInfo);
+  const handleSaveContactInfo = async () => {
+    await saveContactInfo(contactInfo);
     alert("Información de contacto actualizada correctamente.");
   };
 

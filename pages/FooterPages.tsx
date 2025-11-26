@@ -1,11 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, AlertTriangle, Phone, Shield } from 'lucide-react';
 import { getEvents, getContactInfo } from '../services/dataService';
-import { ContactInfo } from '../types';
+import { ContactInfo, EventType } from '../types';
 import { DEFAULT_CONTACT_INFO } from '../constants';
 
 export const FormatsPage: React.FC = () => {
-  const events = getEvents();
+  const [events, setEvents] = useState<EventType[]>([]);
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      setEvents(await getEvents());
+    };
+    loadEvents();
+  }, []);
 
   return (
     <div className="container mx-auto px-4 py-12 min-h-screen">
@@ -89,7 +96,11 @@ export const DirectoryPage: React.FC = () => {
   const [contactInfo, setContactInfo] = useState<ContactInfo>(DEFAULT_CONTACT_INFO);
   
   useEffect(() => {
-    setContactInfo(getContactInfo());
+    const loadContact = async () => {
+        const info = await getContactInfo();
+        if(info) setContactInfo(info);
+    };
+    loadContact();
   }, []);
 
   return (
