@@ -1,3 +1,5 @@
+// services/geminiService.ts
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 
@@ -6,8 +8,11 @@ type ChatMessage = {
   text: string;
 };
 
-// En Vite las env vars públicas deben empezar por VITE_
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+// En Vite, las env vars públicas deben empezar por VITE_
+// Usamos un cast a any para que TypeScript no se queje de import.meta.env
+const apiKey =
+  (((import.meta as any).env?.VITE_GEMINI_API_KEY as string | undefined) ??
+    "").trim();
 
 if (!apiKey) {
   console.warn(
@@ -15,10 +20,9 @@ if (!apiKey) {
   );
 }
 
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-
-// ID del modelo que quieres usar
 const MODEL_ID = "gemini-2.5-flash";
+
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 export const sendMessageToGemini = async (
   history: ChatMessage[],
@@ -29,13 +33,12 @@ export const sendMessageToGemini = async (
   }
 
   try {
-    // Creamos el modelo con la system instruction
+    // Cast a any para evitar el error de tipo con systemInstruction
     const model = genAI.getGenerativeModel({
       model: MODEL_ID,
       systemInstruction: SYSTEM_INSTRUCTION,
-    });
+    } as any);
 
-    // Iniciamos el chat con el historial previo
     const chat = model.startChat({
       history: history.map((h) => ({
         role: h.role,
@@ -43,7 +46,6 @@ export const sendMessageToGemini = async (
       })),
     });
 
-    // Enviamos el nuevo mensaje
     const result = await chat.sendMessage(newMessage);
     const responseText = result.response.text();
 
