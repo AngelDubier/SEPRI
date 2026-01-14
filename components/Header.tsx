@@ -1,10 +1,23 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ShieldCheck, Menu, X } from 'lucide-react';
+import { getContactInfo } from '../services/dataService';
+import { ContactInfo } from '../types';
+import { DEFAULT_CONTACT_INFO } from '../constants';
 
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [contactInfo, setContactInfo] = useState<ContactInfo>(DEFAULT_CONTACT_INFO);
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchBranding = async () => {
+      const info = await getContactInfo();
+      if (info) setContactInfo(info);
+    };
+    fetchBranding();
+  }, []);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -15,7 +28,15 @@ const Header: React.FC = () => {
           {/* Logo Section */}
           <Link to="/" className="flex items-center space-x-3 group">
             <div className="relative">
-              <ShieldCheck className="w-10 h-10 text-sepri-yellow group-hover:scale-110 transition-transform duration-300" />
+              {contactInfo.logoUrl ? (
+                <img 
+                  src={contactInfo.logoUrl} 
+                  className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300" 
+                  alt="Logo SEPRI" 
+                />
+              ) : (
+                <ShieldCheck className="w-10 h-10 text-sepri-yellow group-hover:scale-110 transition-transform duration-300" />
+              )}
               <div className="absolute bottom-0 right-0 bg-sepri-green w-3 h-3 rounded-full border-2 border-sepri-dark"></div>
             </div>
             <div className="flex flex-col leading-tight">

@@ -1,3 +1,4 @@
+
 export interface NewsItem {
   id: string;
   title: string;
@@ -14,17 +15,34 @@ export interface Step {
   deadline?: string;
   isDownloadable?: boolean;
   downloadUrl?: string;
+  videoUrl?: string;
   requiresUpload?: boolean;
-  // Admin management fields
   isCustom?: boolean; 
-  order?: number;
+  order: number;
+}
+
+export interface ConditionalFormat {
+  id: string;
+  name: string;
+  url: string;
 }
 
 export interface Question {
   id: string;
   text: string;
-  triggerSteps: string[]; // IDs of steps that this question activates if YES
-  isEnabled?: boolean; // New: Allow admin to toggle visibility
+  triggerSteps: string[]; 
+  isEnabled?: boolean;
+  yesContent?: string; 
+  noContent?: string;  
+  yesFormats?: ConditionalFormat[];
+  noFormats?: ConditionalFormat[];
+}
+
+export interface ProtocolAlert { 
+  id: string;
+  message: string;
+  type: 'info' | 'warning' | 'danger';
+  active: boolean;
 }
 
 export interface EventType {
@@ -34,8 +52,18 @@ export interface EventType {
   description: string;
   baseSteps: Step[];
   questions: Question[];
-  imageUrl?: string; // New: Custom image for the event card
-  documentUrl?: string; // New: General document attached to the protocol
+  imageUrl?: string;
+  documentUrl?: string;
+  alerts?: ProtocolAlert[]; 
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  imageUrl?: string;
+  order: number;
+  updatedAt?: number;
 }
 
 export interface ChatMessage {
@@ -45,18 +73,11 @@ export interface ChatMessage {
 
 export type UserRole = 'USER' | 'ADMIN' | 'CREATOR';
 
-export interface User {
-  username: string;
-  role: UserRole;
-}
-
-// --- NEW TYPES FOR ADMIN FEATURES ---
-
 export interface UserAccount {
   id: string;
   name: string;
   email: string;
-  passwordHash: string; // Stored securely
+  passwordHash: string;
   role: UserRole;
 }
 
@@ -66,24 +87,6 @@ export interface PopupConfig {
   content: string;
   isEnabled: boolean;
   type: 'info' | 'warning' | 'alert';
-}
-
-export type FormFieldType = 'text' | 'textarea' | 'checkbox' | 'select';
-
-export interface FormField {
-  id: string;
-  label: string;
-  type: FormFieldType;
-  options?: string[]; // For select type
-  required?: boolean;
-}
-
-export interface FormTemplate {
-  id: string;
-  eventId: string; // The event this form belongs to
-  title: string;
-  description?: string;
-  fields: FormField[];
 }
 
 export interface QuickLink {
@@ -103,4 +106,24 @@ export interface ContactInfo {
   facebookUrl?: string;
   instagramUrl?: string;
   youtubeUrl?: string;
+  logoUrl?: string;
+  heroImageUrl?: string;
+  privacyPolicy?: string; 
+  teamMembers?: TeamMember[]; 
+  geminiApiKey?: string;
+}
+
+export interface FormField {
+  id: string;
+  label: string;
+  type: 'text' | 'textarea' | 'checkbox';
+  required?: boolean;
+}
+
+export interface FormTemplate {
+  id: string;
+  eventId: string;
+  title: string;
+  description: string;
+  fields: FormField[];
 }

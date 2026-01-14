@@ -5,7 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // Polyfill for process.env to avoid crashes in code relying on Node.js globals
-    'process.env': {}
+    // Inyecta las variables de entorno del proceso de construcción en el código del cliente.
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY),
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production')
   }
 });

@@ -1,3 +1,4 @@
+
 import { EventType, NewsItem, PopupConfig, FormTemplate, Step, QuickLink, ContactInfo, UserAccount, UserRole } from '../types';
 import { 
   ADMIN_CREDENTIALS, 
@@ -60,7 +61,17 @@ const getLocal = <T>(key: string, defaultVal: T): T => {
 };
 
 const setLocal = (key: string, val: any) => {
-  localStorage.setItem(key, JSON.stringify(val));
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch (e: any) {
+    if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      console.error("Error: Límite de almacenamiento local excedido.", e);
+      throw new Error("quota");
+    } else {
+      console.error("Error al guardar en localStorage:", e);
+      throw e;
+    }
+  }
 };
 
 export const initUsers = async () => {
@@ -102,111 +113,106 @@ export const resetUserPassword = async (userId: string): Promise<string | null> 
 
 export const saveUsers = (users: UserAccount[]) => setLocal(KEYS.USERS, users);
 
-// --- HYBRID DATA MANAGEMENT (BACKEND + LOCAL FALLBACK) ---
+// --- HYBRID DATA MANAGEMENT ---
 
 async function getHybridData<T>(endpoint: string, key: string, defaultData: T): Promise<T> {
   try {
     const response = await fetch(`/.netlify/functions/${endpoint}`);
     if (response.ok) {
       const data = await response.json();
+      setLocal(key, data);
       return data as T;
     }
   } catch (e) {
-    console.warn(`Backend no disponible para ${endpoint}`, e);
+    console.warn(`Backend no disponible para ${endpoint}, usando datos locales.`);
   }
-  // Si el backend falla, usamos SOLO los defaults, NO el localStorage
-  return defaultData;
+  return getLocal(key, defaultData);
 }
 
 async function saveHybridData<T>(endpoint: string, key: string, data: T): Promise<void> {
+  setLocal(key, data);
+  const role = localStorage.getItem('sepri_user_role') || 'USER';
   try {
     const res = await fetch(`/.netlify/functions/${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-sepri-role': role
+      },
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      alert(`No se pudo guardar ${endpoint} en el servidor.`);
+      const errorText = await res.text();
+      console.error(`Error del servidor en ${endpoint}:`, errorText);
+      throw new Error(errorText || `Error ${res.status}`);
     }
   } catch (e) {
-    console.warn(`Error al sincronizar ${endpoint} con el backend`, e);
-    alert(`No se pudo guardar ${endpoint}. Revisa tu conexión.`);
+    console.warn(`Fallo de sincronización en ${endpoint}.`);
+    throw e;
   }
 }
 
 // EVENTS
-export const getEvents = () => getHybridData('events', KEYS.EVENTS, EVENTS_DATA);
+export const getEvents = async () => {
+  const data = await getHybridData<EventType[]>('events', KEYS.EVENTS, EVENTS_DATA as any);
+  return data.map(event => ({
+    ...event,
+    baseSteps: [...(event.baseSteps || [])].sort((a, b) => (a.order || 0) - (b.order || 0))
+  }));
+};
+
 export const saveEvents = (data: EventType[]) => saveHybridData('events', KEYS.EVENTS, data);
+
 export const addEvent = async (event: EventType) => {
   const items = await getEvents();
   items.push(event);
   await saveEvents(items);
 };
+
 export const deleteEvent = async (id: string) => {
   let items = await getEvents();
   items = items.filter(i => i.id !== id);
   await saveEvents(items);
 };
+
 export const updateEventStep = async (eventId: string, updatedStep: Step) => {
   const events = await getEvents();
   const event = events.find(e => e.id === eventId);
   if (event) {
     const idx = event.baseSteps.findIndex(s => s.id === updatedStep.id);
-    if (idx !== -1) event.baseSteps[idx] = updatedStep;
-    else event.baseSteps.push(updatedStep);
+    if (idx !== -1) {
+      event.baseSteps[idx] = updatedStep;
+    } else {
+      const maxOrder = event.baseSteps.reduce((max, s) => Math.max(max, s.order || 0), -1);
+      updatedStep.order = maxOrder + 1;
+      event.baseSteps.push(updatedStep);
+    }
+    event.baseSteps.sort((a, b) => (a.order || 0) - (b.order || 0)).forEach((s, i) => s.order = i);
     await saveEvents(events);
   }
 };
 
 // NEWS
-export const getNews = () => getHybridData('news', KEYS.NEWS, NEWS_DATA);
+export const getNews = () => getHybridData<NewsItem[]>('news', KEYS.NEWS, NEWS_DATA);
 export const saveNews = (data: NewsItem[]) => saveHybridData('news', KEYS.NEWS, data);
 
 // POPUPS
-export const getPopups = () => getHybridData('popups', KEYS.POPUPS, DEFAULT_POPUPS);
+export const getPopups = () => getHybridData<PopupConfig[]>('popups', KEYS.POPUPS, DEFAULT_POPUPS as any);
 export const savePopups = (data: PopupConfig[]) => saveHybridData('popups', KEYS.POPUPS, data);
 export const togglePopup = async (id: string, isEnabled: boolean) => {
   const items = await getPopups();
   const item = items.find(i => i.id === id);
   if (item) { item.isEnabled = isEnabled; await savePopups(items); }
 };
-export const updatePopup = async (updated: PopupConfig) => {
-  const items = await getPopups();
-  const idx = items.findIndex(i => i.id === updated.id);
-  if (idx !== -1) { items[idx] = updated; await savePopups(items); }
-};
 
 // FORMS
-export const getForms = () => getHybridData('forms', KEYS.FORMS, DEFAULT_FORMS);
+export const getForms = () => getHybridData<FormTemplate[]>('forms', KEYS.FORMS, DEFAULT_FORMS as any);
 export const saveForms = (data: FormTemplate[]) => saveHybridData('forms', KEYS.FORMS, data);
-export const addForm = async (form: FormTemplate) => {
-  const items = await getForms();
-  items.push(form);
-  await saveForms(items);
-};
-export const deleteForm = async (id: string) => {
-  const items = await getForms();
-  await saveForms(items.filter(i => i.id !== id));
-};
 
 // QUICK LINKS
-export const getQuickLinks = () => getHybridData('quickLinks', KEYS.QUICK_LINKS, DEFAULT_QUICK_LINKS);
+export const getQuickLinks = () => getHybridData<QuickLink[]>('quickLinks', KEYS.QUICK_LINKS, DEFAULT_QUICK_LINKS);
 export const saveQuickLinks = (data: QuickLink[]) => saveHybridData('quickLinks', KEYS.QUICK_LINKS, data);
-export const addQuickLink = async (link: QuickLink) => {
-  const items = await getQuickLinks();
-  items.push(link);
-  await saveQuickLinks(items);
-};
-export const deleteQuickLink = async (id: string) => {
-  const items = await getQuickLinks();
-  await saveQuickLinks(items.filter(i => i.id !== id));
-};
-export const updateQuickLink = async (link: QuickLink) => {
-  const items = await getQuickLinks();
-  const idx = items.findIndex(i => i.id === link.id);
-  if (idx !== -1) { items[idx] = link; await saveQuickLinks(items); }
-};
 
 // CONTACT
-export const getContactInfo = () => getHybridData('contact', KEYS.CONTACT, DEFAULT_CONTACT_INFO);
+export const getContactInfo = () => getHybridData<ContactInfo>('contact', KEYS.CONTACT, DEFAULT_CONTACT_INFO);
 export const saveContactInfo = (data: ContactInfo) => saveHybridData('contact', KEYS.CONTACT, data);

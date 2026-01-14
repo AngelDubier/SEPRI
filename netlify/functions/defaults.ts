@@ -1,3 +1,4 @@
+
 // Default data to seed the backend if the database (Blobs) is empty.
 // Duplicated from constants.ts to ensure backend isolation.
 
@@ -58,7 +59,9 @@ export const DEFAULT_CONTACT_INFO = {
   address: "Sede Administrativa Distrito 22, Colombia",
   facebookUrl: "https://facebook.com",
   instagramUrl: "https://instagram.com",
-  youtubeUrl: "https://youtube.com"
+  youtubeUrl: "https://youtube.com",
+  logoUrl: "",
+  heroImageUrl: ""
 };
 
 export const EVENTS_DATA = [

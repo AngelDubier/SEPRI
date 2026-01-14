@@ -1,3 +1,4 @@
+
 import { getStore } from '@netlify/blobs';
 import type { Context } from '@netlify/functions';
 import { EVENTS_DATA } from './defaults';
@@ -16,9 +17,19 @@ export default async (req: Request, context: Context) => {
   }
 
   if (req.method === 'POST') {
-    const body = await req.json();
-    await store.setJSON(KEY, body);
-    return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+    // SECURITY CHECK: Verify role header
+    const role = req.headers.get('x-sepri-role');
+    if (role !== 'ADMIN' && role !== 'CREATOR') {
+      return new Response("Forbidden: Access Denied", { status: 403 });
+    }
+
+    try {
+      const body = await req.json();
+      await store.setJSON(KEY, body);
+      return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response("Invalid JSON body", { status: 400 });
+    }
   }
 
   return new Response("Method not allowed", { status: 405 });

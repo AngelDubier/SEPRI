@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Calendar, ChevronRight } from 'lucide-react';
-import { getNews, getEvents } from '../services/dataService';
-import { NewsItem, EventType } from '../types';
+import { ArrowRight, Calendar, ChevronRight, ChevronLeft, Newspaper, User, ShieldCheck, Quote } from 'lucide-react';
+import { getNews, getEvents, getContactInfo } from '../services/dataService';
+import { NewsItem, EventType, ContactInfo } from '../types';
+import { DEFAULT_CONTACT_INFO, NEWS_CAROUSEL_INTERVAL } from '../constants';
+import { Button as MovingBorderButton } from '../components/ui/moving-border';
 import * as Icons from 'lucide-react';
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const IconComponent = (Icons as any)[name] || Icons.FileText;
   return <IconComponent className={className} />;
 };
@@ -14,175 +15,282 @@ const DynamicIcon = ({ name, className }: { name: string, className?: string }) 
 const Home: React.FC = () => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<EventType[]>([]);
-  
-  // Carousel State
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [contactInfo, setContactInfo] = useState<ContactInfo>(DEFAULT_CONTACT_INFO);
+  const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [isHovering, setIsHovering] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
-        const fetchedNews = await getNews();
-        setNews(fetchedNews.slice(0, 8));
-        const fetchedEvents = await getEvents();
-        setEvents(fetchedEvents);
+        try {
+          const fetchedNews = await getNews();
+          setNews(fetchedNews.slice(0, 8));
+          const fetchedEvents = await getEvents();
+          setEvents(fetchedEvents);
+          const fetchedContact = await getContactInfo();
+          if (fetchedContact) setContactInfo(fetchedContact);
+        } catch (error) {
+          console.error("Error al cargar datos de inicio:", error);
+        }
     };
     fetchData();
   }, []);
 
-  // Animation Loop for Carousel
   useEffect(() => {
-    let animationFrameId: number;
+    if (news.length === 0 || isHovering) return;
+    const interval = setInterval(() => {
+      setCurrentNewsIndex((prev) => (prev + 1) % news.length);
+    }, NEWS_CAROUSEL_INTERVAL);
+    return () => clearInterval(interval);
+  }, [news.length, isHovering]);
 
-    const scroll = () => {
-      if (isHovering && scrollContainerRef.current) {
-        scrollContainerRef.current.scrollLeft += 1.5; // Adjust speed here
-        
-        // Loop back logic (optional, for infinite feeling, we'd need to clone items, 
-        // but for now simple reset when end is reached)
-        const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
-        if (scrollLeft >= (scrollWidth - clientWidth)) {
-           scrollContainerRef.current.scrollLeft = 0;
-        }
-      }
-      animationFrameId = requestAnimationFrame(scroll);
-    };
+  const truncateText = (text: string, maxLength: number) => {
+    if (!text) return "";
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength).trim() + "...";
+  };
 
-    if (isHovering) {
-      animationFrameId = requestAnimationFrame(scroll);
-    }
-
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [isHovering]);
+  const nextSlide = () => setCurrentNewsIndex((prev) => (prev + 1) % news.length);
+  const prevSlide = () => setCurrentNewsIndex((prev) => (prev - 1 + news.length) % news.length);
 
   return (
-    <div>
-      {/* Hero Section */}
-      <section className="relative bg-sepri-medium pt-20 pb-32 overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <path d="M0 100 C 20 0 50 0 100 100 Z" fill="white" />
-          </svg>
-        </div>
+    <div className="relative pb-20">
+      <div className="relative z-10">
+        {/* Hero Section Institucional con Efectos Hover y 3D */}
+        <section className="relative min-h-[75vh] flex flex-col justify-center overflow-hidden bg-sepri-dark/80 backdrop-blur-[2px] group">
+          {/* Fondo Base */}
+          <div className="absolute inset-0 z-0">
+            <div className="absolute inset-0 bg-gradient-to-br from-sepri-dark/90 via-sepri-medium/70 to-sepri-dark/90 opacity-90"></div>
+            <div className="absolute top-0 right-0 w-1/2 h-full bg-sepri-yellow/10 blur-[120px] rounded-full translate-x-1/2 -translate-y-1/4"></div>
+          </div>
 
-        <div className="container mx-auto px-4 relative z-10 text-center">
-          <div className="inline-block mb-4">
-             <Icons.ShieldCheck className="w-24 h-24 text-sepri-yellow mx-auto mb-4 drop-shadow-md" />
-          </div>
-          <h1 className="text-6xl md:text-8xl font-black text-white tracking-tighter mb-2 drop-shadow-lg">
-            SEPRI
-          </h1>
-          <div className="inline-block bg-white px-6 py-2 rounded-full mb-4 shadow-md">
-            <span className="text-sepri-medium font-bold tracking-widest uppercase text-sm md:text-base">
-              Seguridad y Prevención del Riesgo
-            </span>
-          </div>
-          <div className="mt-2">
-            <span className="bg-sepri-yellow text-sepri-dark font-extrabold px-4 py-1 rounded-lg text-sm uppercase tracking-wider">
-              Distrito 22
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* News Teaser Carousel */}
-      <section className="container mx-auto px-4 -mt-20 relative z-20 mb-16">
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 border-t-4 border-sepri-yellow">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-sepri-dark flex items-center">
-              <Calendar className="mr-2 text-sepri-yellow" /> Novedades y Noticias
-            </h2>
-            <Link to="/noticias" className="text-sepri-medium hover:text-sepri-dark font-medium flex items-center text-sm">
-              Ver todas <ArrowRight size={16} className="ml-1" />
-            </Link>
-          </div>
-          
+          {/* Capa de Fondo Animada (Solo en Hover) */}
           <div 
-            ref={scrollContainerRef}
-            className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide"
+            className="absolute inset-0 z-[1] opacity-0 group-hover:opacity-20 transition-opacity duration-1000 pointer-events-none animate-hero-shimmer"
+            style={{
+              backgroundImage: 'linear-gradient(45deg, #ffffff 0%, #164E87 50%, #ffffff 100%)',
+            }}
+          ></div>
+
+          <div className="container mx-auto px-6 relative z-10 py-20 flex justify-center">
+            <div className="max-w-4xl text-center">
+              <div className="inline-flex items-center px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8 backdrop-blur-sm">
+                <ShieldCheck size={16} className="text-sepri-yellow mr-2" />
+                <span className="text-white/80 text-[10px] font-bold uppercase tracking-[0.2em]">Distrito 22 - IPUC</span>
+              </div>
+              
+              <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-white mb-6 leading-[0.9] tracking-tighter">
+                <span 
+                  className="block text-white/70 font-light text-2xl md:text-4xl mb-4 italic tracking-normal"
+                  style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.3)' }}
+                >
+                  Seguridad y Prevención del Riesgo
+                </span>
+                <span 
+                  className="text-sepri-yellow"
+                  style={{ 
+                    textShadow: '2px 2px 0px #b37b00, 4px 4px 0px rgba(0,0,0,0.2), 6px 6px 20px rgba(0,0,0,0.4)'
+                  }}
+                >
+                  SEPRI
+                </span>
+              </h1>
+              
+              <p className="text-lg md:text-xl text-white/60 mb-10 max-w-2xl mx-auto leading-relaxed font-medium">
+                Herramienta integral para la gestión de protocolos, autorización de eventos y prevención institucional.
+              </p>
+
+              <div className="flex flex-wrap gap-6 justify-center">
+                <MovingBorderButton
+                  as={Link}
+                  to="/noticias"
+                  borderRadius="1rem"
+                  className="bg-white/10 text-white hover:bg-sepri-yellow hover:text-sepri-dark px-8 py-4 font-black text-xs uppercase tracking-widest border-white/20 transition-all duration-300"
+                  containerClassName="h-14 w-56 shadow-lg"
+                >
+                  Ver Novedades
+                </MovingBorderButton>
+                
+                <MovingBorderButton
+                  as={Link}
+                  to="/directorio-emergencia"
+                  borderRadius="1rem"
+                  className="bg-white/10 text-white hover:bg-sepri-yellow hover:text-sepri-dark px-8 py-4 font-black text-xs uppercase tracking-widest border-white/20 transition-all duration-300"
+                  containerClassName="h-14 w-64 shadow-lg"
+                >
+                  Directorio Emergencia <ChevronRight size={16} className="ml-2" />
+                </MovingBorderButton>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Noticias Carousel */}
+        <section className="container mx-auto px-4 -mt-16 relative z-30 mb-16">
+          <div 
+            className="bg-white/90 rounded-3xl shadow-2xl p-6 md:p-8 border-t-4 border-sepri-yellow overflow-hidden backdrop-blur-md"
             onMouseEnter={() => setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
-            style={{ scrollBehavior: 'auto' }} // Ensure smooth javascript scroll
           >
-            {news.map((n) => (
-              <div key={n.id} className="min-w-[300px] md:min-w-[400px] bg-gray-50 rounded-xl p-5 hover:shadow-md transition-shadow border border-gray-100 flex flex-col md:flex-row gap-4 flex-shrink-0">
-                <div className="w-24 h-24 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                   {n.imageUrl ? (
-                     <img src={n.imageUrl} alt={n.title} className="w-full h-full object-cover" />
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-2xl font-black text-sepri-dark flex items-center uppercase tracking-tight">
+                <Calendar className="mr-3 text-sepri-yellow" size={28} /> Últimas Novedades
+              </h2>
+              <div className="flex items-center gap-4">
+                 <div className="hidden md:flex gap-2 mr-4">
+                   <button onClick={prevSlide} className="p-2 rounded-xl bg-gray-50/50 hover:bg-sepri-bg transition-colors text-sepri-medium">
+                     <ChevronLeft size={20} />
+                   </button>
+                   <button onClick={nextSlide} className="p-2 rounded-xl bg-gray-50/50 hover:bg-sepri-bg transition-colors text-sepri-medium">
+                     <ChevronRight size={20} />
+                   </button>
+                 </div>
+                 <Link to="/noticias" className="text-sepri-medium hover:text-sepri-dark font-black flex items-center text-xs uppercase tracking-widest transition-colors">
+                   Ver todas <ArrowRight size={14} className="ml-2" />
+                 </Link>
+              </div>
+            </div>
+            
+            <div className="relative overflow-hidden">
+              <div 
+                className="flex transition-transform duration-700 ease-in-out"
+                style={{ transform: `translateX(-${currentNewsIndex * 100}%)` }}
+              >
+                {news.map((n) => (
+                  <div key={n.id} className="min-w-full flex-shrink-0 px-1">
+                    <div className="bg-gray-50/30 rounded-2xl p-4 md:p-6 border border-gray-100 flex flex-col md:flex-row gap-6 items-center md:items-stretch min-h-[200px]">
+                      <div className="w-full md:w-56 h-44 md:h-auto bg-gray-200/50 rounded-2xl overflow-hidden flex-shrink-0 shadow-sm border border-gray-100">
+                        {n.imageUrl ? (
+                          <img src={n.imageUrl} alt={n.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100/50 p-4">
+                            <Newspaper size={32} className="opacity-30 mb-2" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 flex flex-col justify-center text-center md:text-left py-2">
+                        <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
+                          <span className={`text-[10px] uppercase tracking-widest font-black px-3 py-1 rounded-lg shadow-sm ${
+                            n.category === 'Importante' ? 'bg-red-600 text-white' : 'bg-sepri-medium text-white'
+                          }`}>
+                            {n.category}
+                          </span>
+                          <span className="text-xs text-gray-400 font-bold tracking-tight uppercase">{n.date}</span>
+                        </div>
+                        
+                        <h3 className="font-black text-sepri-dark mb-2 text-xl md:text-2xl leading-tight">
+                          {n.title}
+                        </h3>
+                        
+                        <div className="text-sm text-gray-600 mb-6 flex-grow">
+                          <p className="line-clamp-2 font-medium">
+                            {truncateText(n.summary.split('\n')[0], 150)}
+                          </p>
+                        </div>
+                        
+                        <div className="mt-auto">
+                          <Link 
+                            to="/noticias" 
+                            className="inline-flex items-center text-sepri-medium font-black text-[10px] uppercase tracking-[0.2em] group"
+                          >
+                            Continuar leyendo <ArrowRight size={14} className="ml-2 group-hover:translate-x-1 transition-transform" />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Protocol Grid */}
+        <section className="container mx-auto px-4 mb-20 relative z-10">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-black text-sepri-dark mb-4 uppercase tracking-tighter">Gestión de Protocolos</h2>
+            <div className="w-20 h-1.5 bg-sepri-yellow mx-auto rounded-full mb-6"></div>
+            <p className="text-gray-500 max-w-2xl mx-auto font-medium">
+              Selecciona el tipo de evento que vas a realizar para iniciar el proceso de cumplimiento normativo y seguridad institucional.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+            {events.map((event) => (
+              <div key={event.id} className="bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all duration-500 border border-gray-100 flex flex-col items-center text-center group">
+                <div className="mb-8 relative">
+                   <div className="absolute inset-0 bg-sepri-yellow/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                   {event.imageUrl ? (
+                      <div className="w-28 h-28 rounded-3xl overflow-hidden border-4 border-sepri-bg shadow-lg relative z-10">
+                          <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+                      </div>
                    ) : (
-                     <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center p-2">
-                       Sin Imagen
-                     </div>
+                      <div className="bg-sepri-bg p-6 rounded-3xl group-hover:bg-sepri-yellow transition-colors duration-300 relative z-10">
+                          <DynamicIcon name={event.iconName} className="w-12 h-12 text-sepri-medium group-hover:text-sepri-dark" />
+                      </div>
                    )}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                      n.category === 'Importante' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
-                    }`}>
-                      {n.category}
-                    </span>
-                    <span className="text-xs text-gray-400">{n.date}</span>
-                  </div>
-                  <h3 className="font-bold text-sepri-dark mb-2 text-sm md:text-base line-clamp-2">{n.title}</h3>
-                  <p className="text-xs md:text-sm text-gray-600 line-clamp-2">{n.summary}</p>
-                </div>
+                <h3 className="text-2xl font-black text-sepri-dark mb-4 tracking-tight">{event.title}</h3>
+                <p className="text-gray-500 text-sm mb-10 flex-grow font-medium leading-relaxed">{event.description}</p>
+                
+                <MovingBorderButton
+                  as={Link}
+                  to={`/event/${event.id}`}
+                  borderRadius="1rem"
+                  className="bg-sepri-dark hover:bg-sepri-medium text-white font-black text-[10px] uppercase tracking-[0.2em]"
+                  containerClassName="w-full h-14 shadow-lg"
+                >
+                  Iniciar Protocolo <ChevronRight size={16} className="ml-2" />
+                </MovingBorderButton>
               </div>
             ))}
-            {news.length === 0 && <p className="text-gray-500 w-full text-center py-4">No hay noticias recientes.</p>}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Event Grid */}
-      <section className="container mx-auto px-4 mb-20">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-sepri-dark mb-4">Gestión de Protocolos</h2>
-          <p className="text-gray-600 max-w-2xl mx-auto">
-            Selecciona el tipo de evento que vas a realizar para iniciar el proceso de autorización y conocer los requisitos de seguridad.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {events.map((event) => (
-            <div key={event.id} className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 flex flex-col items-center text-center group overflow-hidden relative">
-              
-              {/* Image or Icon */}
-              <div className="mb-6 relative z-10">
-                 {event.imageUrl ? (
-                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-sepri-bg shadow-md">
-                        <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
-                    </div>
-                 ) : (
-                    <div className="bg-sepri-bg p-4 rounded-full group-hover:bg-sepri-yellow transition-colors duration-300">
-                        <DynamicIcon name={event.iconName} className="w-10 h-10 text-sepri-medium group-hover:text-sepri-dark" />
-                    </div>
-                 )}
+        {/* Team Section */}
+        {contactInfo.teamMembers && contactInfo.teamMembers.length > 0 && (
+          <section className="bg-white/70 backdrop-blur-md py-24 relative z-10">
+            <div className="container mx-auto px-4 text-center">
+              <h2 className="text-4xl font-black text-sepri-dark mb-16 uppercase tracking-tighter">Equipo Directivo</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
+                {contactInfo.teamMembers.map((member) => (
+                  <div key={member.id} className="flex flex-col items-center group">
+                     <div className="w-36 h-36 md:w-48 md:h-48 rounded-full overflow-hidden shadow-2xl border-4 border-white mb-8 group-hover:scale-105 transition-transform duration-500 relative bg-gray-100/50">
+                        {member.imageUrl ? (
+                          <img 
+                            key={`${member.id}-${member.updatedAt || '0'}`}
+                            src={member.imageUrl + (member.imageUrl.startsWith('data:') ? '' : `?v=${member.updatedAt || ''}`)} 
+                            className="w-full h-full object-cover" 
+                            alt={member.name} 
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-300">
+                            <Icons.User size={80} />
+                          </div>
+                        )}
+                     </div>
+                     <h3 className="font-black text-sepri-dark text-xl uppercase tracking-tight leading-tight">{member.name}</h3>
+                     <p className="text-sepri-medium font-bold text-[10px] uppercase tracking-[0.2em] mt-2">{member.role}</p>
+                  </div>
+                ))}
               </div>
-
-              <h3 className="text-xl font-bold text-sepri-dark mb-3 relative z-10">{event.title}</h3>
-              <p className="text-gray-500 text-sm mb-8 flex-grow relative z-10">
-                {event.description}
-              </p>
-              <Link 
-                to={`/event/${event.id}`} 
-                className="w-full bg-sepri-medium hover:bg-sepri-dark text-white font-bold py-3 px-6 rounded-xl transition-colors flex justify-center items-center relative z-10"
-              >
-                Iniciar Proceso <ChevronRight size={18} className="ml-2" />
-              </Link>
             </div>
-          ))}
-        </div>
-      </section>
+          </section>
+        )}
 
-      {/* Moto Banner */}
-      <section className="bg-sepri-dark py-16 text-center">
-        <div className="container mx-auto px-4">
-          <Icons.Quote className="w-12 h-12 text-sepri-yellow mx-auto mb-6 opacity-50" />
-          <h2 className="text-2xl md:text-4xl font-bold text-white max-w-4xl mx-auto leading-tight">
-            "La seguridad se trata de hacer lo correcto, incluso si nadie está mirando"
-          </h2>
-        </div>
-      </section>
+        {/* Quote Banner */}
+        <section className="bg-sepri-dark/95 py-24 text-center relative overflow-hidden z-10 backdrop-blur-sm">
+          <div className="absolute inset-0 opacity-10 flex items-center justify-center pointer-events-none">
+             <ShieldCheck size={400} className="text-white" />
+          </div>
+          <div className="container mx-auto px-4 relative z-10">
+            <Quote className="w-16 h-16 text-sepri-yellow mx-auto mb-10 opacity-40" />
+            <h2 className="text-3xl md:text-5xl font-black text-white max-w-5xl mx-auto leading-tight italic tracking-tighter">
+              "La seguridad es una cultura de cuidado mutuo, basada en la prevención y el cumplimiento del deber."
+            </h2>
+          </div>
+        </section>
+      </div>
     </div>
   );
 };

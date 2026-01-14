@@ -1,7 +1,9 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Loader2, Shield } from 'lucide-react';
+import { MessageSquare, X, Send, Loader2, Shield, AlertCircle } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { sendMessageToGemini } from '../services/geminiService';
+import { getContactInfo } from '../services/dataService';
 
 const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,6 +12,7 @@ const ChatWidget: React.FC = () => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [apiKey, setApiKey] = useState<string | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -17,11 +20,21 @@ const ChatWidget: React.FC = () => {
   };
 
   useEffect(() => {
+    const fetchConfig = async () => {
+      const info = await getContactInfo();
+      if (info?.geminiApiKey) {
+        setApiKey(info.geminiApiKey);
+      }
+    };
+    fetchConfig();
+  }, [isOpen]); // Recargar al abrir por si se actualizó en admin
+
+  useEffect(() => {
     if (isOpen) scrollToBottom();
   }, [messages, isOpen]);
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || !apiKey) return;
 
     const userMsg = input;
     setInput('');
@@ -30,7 +43,7 @@ const ChatWidget: React.FC = () => {
     setMessages(newMessages);
     setIsLoading(true);
 
-    const responseText = await sendMessageToGemini(newMessages, userMsg);
+    const responseText = await sendMessageToGemini(newMessages, userMsg, apiKey);
 
     setMessages(prev => [...prev, { role: 'model', text: responseText }]);
     setIsLoading(false);
@@ -66,6 +79,14 @@ const ChatWidget: React.FC = () => {
 
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-4 scrollbar-hide">
+            {!apiKey && (
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 items-start animate-pulse">
+                <AlertCircle className="text-amber-600 flex-shrink-0" size={18} />
+                <p className="text-amber-800 text-xs font-medium">
+                  El Chat de IA no está configurado. Un administrador debe ingresar la API Key en el panel de configuración.
+                </p>
+              </div>
+            )}
             {messages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div 
@@ -91,20 +112,20 @@ const ChatWidget: React.FC = () => {
 
           {/* Input Area */}
           <div className="p-3 bg-white border-t border-gray-200">
-            <div className="flex items-center space-x-2 bg-gray-100 rounded-full px-4 py-2">
+            <div className={`flex items-center space-x-2 rounded-full px-4 py-2 ${!apiKey ? 'bg-gray-50' : 'bg-gray-100'}`}>
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyPress}
-                placeholder="Escribe tu consulta..."
+                placeholder={apiKey ? "Escribe tu consulta..." : "Chat desactivado"}
                 className="flex-1 bg-transparent outline-none text-sm text-gray-700"
-                disabled={isLoading}
+                disabled={isLoading || !apiKey}
               />
               <button 
                 onClick={handleSend} 
-                disabled={!input.trim() || isLoading}
-                className={`p-2 rounded-full transition-colors ${input.trim() ? 'text-sepri-medium hover:bg-blue-100' : 'text-gray-400'}`}
+                disabled={!input.trim() || isLoading || !apiKey}
+                className={`p-2 rounded-full transition-colors ${input.trim() && apiKey ? 'text-sepri-medium hover:bg-blue-100' : 'text-gray-400'}`}
               >
                 <Send size={18} />
               </button>
