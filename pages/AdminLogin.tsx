@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { Lock, LogOut, Settings, Newspaper, MessageSquare, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, List, AlertCircle, User, ArrowUp, ArrowDown, Video, Facebook, Instagram, Youtube, Link as LinkIcon, Bell, Phone, Mail, MapPin, ArrowLeft, ChevronDown, ChevronUp, Download, Shield, X, Eye, EyeOff, Bot } from 'lucide-react';
+import { Lock, LogOut, Settings, Newspaper, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, User, Bell, Phone, Mail, MapPin, ArrowLeft, X, Eye, EyeOff } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { DEFAULT_CONTACT_INFO } from '../constants';
-import { UserRole, NewsItem, EventType, Question, ContactInfo, ProtocolAlert, TeamMember, Step, PopupConfig, QuickLink, ConditionalFormat } from '../types';
+import { UserRole, NewsItem, EventType, ContactInfo, PopupConfig, QuickLink, TeamMember, Step } from '../types';
 import { getNews, saveNews, getEvents, saveEvents, addEvent, deleteEvent, getContactInfo, saveContactInfo, authenticateUser, getPopups, savePopups, getQuickLinks, saveQuickLinks } from '../services/dataService';
 import { Button as MovingBorderButton } from '../components/ui/moving-border';
 
@@ -40,7 +40,6 @@ const AdminLogin: React.FC = () => {
   const [contactInfo, setContactInfo] = useState<ContactInfo>(DEFAULT_CONTACT_INFO);
   const [popups, setPopups] = useState<PopupConfig[]>([]);
   const [quickLinks, setQuickLinks] = useState<QuickLink[]>([]);
-  const [showApiKey, setShowApiKey] = useState(false);
 
   // States for sub-editors
   const [isEditingNews, setIsEditingNews] = useState(false);
@@ -50,7 +49,6 @@ const AdminLogin: React.FC = () => {
   const [isEditingPopup, setIsEditingPopup] = useState(false);
   const [currentPopup, setCurrentPopup] = useState<Partial<PopupConfig>>({ title: '', content: '', type: 'info', isEnabled: true });
   const [newMember, setNewMember] = useState<Partial<TeamMember>>({ name: '', role: '' });
-  const [newMemberLoading, setNewMemberLoading] = useState(false);
   const [newQuickLink, setNewQuickLink] = useState<Partial<QuickLink>>({ title: '', url: '', isEnabled: true });
   
   // Edit mode tracking states
@@ -266,7 +264,6 @@ const AdminLogin: React.FC = () => {
       return;
     }
 
-    // Validation for step video URLs
     const invalidVideoUrl = currentProtocol.baseSteps?.some(s => s.videoUrl && s.videoUrl.trim() !== '' && !s.videoUrl.match(/^https?:\/\//));
     if (invalidVideoUrl) {
       alert("La URL del video en uno de los pasos no es válida. Debe iniciar con http:// o https://");
@@ -501,33 +498,6 @@ const AdminLogin: React.FC = () => {
           <div className="max-w-4xl space-y-10 pb-24">
             <h2 className="text-3xl font-black text-sepri-dark border-b pb-4">Configuración del Sistema</h2>
 
-            {/* Sección: Chat de IA */}
-            <section className="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
-              <h3 className="font-bold text-lg flex items-center gap-2 text-sepri-medium"><Bot size={20}/> Configuración Chat de IA</h3>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-black uppercase text-gray-400">Gemini API Key</label>
-                  <div className="relative">
-                    <input 
-                      type={showApiKey ? "text" : "password"} 
-                      placeholder="Ingrese la API Key de Google Gemini"
-                      className="w-full border p-3 rounded-xl outline-none pr-10 text-sm font-mono"
-                      value={contactInfo.geminiApiKey || ''}
-                      onChange={e => setContactInfo({...contactInfo, geminiApiKey: e.target.value})}
-                    />
-                    <button 
-                      type="button" 
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-sepri-medium transition-colors"
-                    >
-                      {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-gray-400 italic font-medium">Esta clave es necesaria para que el asistente de IA pueda responder consultas sobre protocolos.</p>
-                </div>
-              </div>
-            </section>
-
             {/* Avisos Emergentes (Popups) */}
             <section className="bg-white p-6 rounded-2xl shadow-sm border space-y-6">
               <div className="flex justify-between items-center">
@@ -564,7 +534,7 @@ const AdminLogin: React.FC = () => {
 
             {/* Enlaces Rápidos (Quick Links) */}
             <section className="bg-white p-6 rounded-2xl shadow-sm border space-y-6">
-              <h3 className="font-bold text-lg flex items-center gap-2 text-sepri-medium"><LinkIcon size={20}/> Enlaces Rápidos (Footer)</h3>
+              <h3 className="font-bold text-lg flex items-center gap-2 text-sepri-medium"><Save size={20}/> Enlaces Rápidos (Footer)</h3>
               <div className="flex gap-3">
                 <input type="text" placeholder="Título enlace" className="flex-1 border p-3 rounded-xl outline-none" value={newQuickLink.title || ''} onChange={e => setNewQuickLink({...newQuickLink, title: e.target.value})} />
                 <input type="text" placeholder="URL (ej: /noticias)" className="flex-1 border p-3 rounded-xl outline-none" value={newQuickLink.url || ''} onChange={e => setNewQuickLink({...newQuickLink, url: e.target.value})} />
