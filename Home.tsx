@@ -1,10 +1,9 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Calendar, ChevronRight, ChevronLeft } from 'lucide-react';
-import { getNews, getEvents, getContactInfo } from '../services/dataService';
-import { NewsItem, EventType, ContactInfo } from '../types';
-import { DEFAULT_CONTACT_INFO, NEWS_CAROUSEL_INTERVAL } from '../constants';
+import { getNews, getEvents, getContactInfo } from './services/dataService';
+import { NewsItem, EventType, ContactInfo } from './types';
+import { DEFAULT_CONTACT_INFO, NEWS_CAROUSEL_INTERVAL } from './constants';
 import * as Icons from 'lucide-react';
 
 const DynamicIcon = ({ name, className }: { name: string, className?: string }) => {

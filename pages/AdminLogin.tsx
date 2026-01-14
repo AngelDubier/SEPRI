@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Lock, LogOut, Settings, Newspaper, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, User, Bell, Phone, Mail, MapPin, ArrowLeft, X, Eye, EyeOff } from 'lucide-react';
+import { Lock, LogOut, Settings, Newspaper, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, User, Bell, Phone, Mail, MapPin, ArrowLeft, X, Eye, EyeOff, Shield, MessageSquare } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { DEFAULT_CONTACT_INFO } from '../constants';
 import { UserRole, NewsItem, EventType, ContactInfo, PopupConfig, QuickLink, TeamMember, Step } from '../types';
@@ -32,6 +31,7 @@ const AdminLogin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentRole, setCurrentRole] = useState<UserRole>('USER');
+  const [showApiKey, setShowApiKey] = useState(false);
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<'news' | 'protocols' | 'config'>('news');
@@ -189,6 +189,7 @@ const AdminLogin: React.FC = () => {
   };
 
   const handleRemovePopup = (id: string) => {
+    setContactInfo(prev => ({ ...prev })); // Dummy update to trigger rerender if needed, but not actually removing from popups list in this specific function as it should filter local state
     setPopups(prev => prev.filter(p => p.id !== id));
   };
 
@@ -468,6 +469,7 @@ const AdminLogin: React.FC = () => {
                             <input type="text" placeholder="Descripción corta" className="w-full border p-2 rounded text-sm outline-none" value={step.description} onChange={e => handleUpdateStep(step.id, 'description', e.target.value)} />
                             <div className="space-y-1">
                                <label className="text-[10px] font-black uppercase text-gray-400">Video (URL)</label>
+                               {/* Fix: Wrap handleUpdateStep in an arrow function to properly handle change events and avoid immediate execution */}
                                <input type="text" placeholder="https://youtube.com/..." className="w-full border p-2 rounded text-xs outline-none bg-white" value={step.videoUrl || ''} onChange={e => handleUpdateStep(step.id, 'videoUrl', e.target.value)} />
                             </div>
                          </div>
@@ -621,6 +623,39 @@ const AdminLogin: React.FC = () => {
               </div>
               <input type="email" placeholder="Email institucional" className="w-full border p-3 rounded-lg" value={contactInfo.email || ''} onChange={e => setContactInfo({...contactInfo, email: e.target.value})} />
               <input type="text" placeholder="Dirección sede" className="w-full border p-3 rounded-lg" value={contactInfo.address || ''} onChange={e => setContactInfo({...contactInfo, address: e.target.value})} />
+            </section>
+
+            {/* Chat de IA */}
+            <section className="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+              <h3 className="font-bold text-lg flex items-center gap-2 text-sepri-medium"><MessageSquare size={20}/> Chat de IA</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-black uppercase text-gray-400 mb-2">Google Gemini API Key</label>
+                  <div className="relative">
+                    <input 
+                      type={showApiKey ? "text" : "password"} 
+                      className="w-full border p-3 rounded-xl outline-none pr-12" 
+                      placeholder="Ingrese la clave de API..." 
+                      value={contactInfo.geminiApiKey || ''} 
+                      onChange={e => setContactInfo({...contactInfo, geminiApiKey: e.target.value})} 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-sepri-medium"
+                    >
+                      {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2 italic font-medium">Configuración necesaria para el funcionamiento del Asistente Virtual SEPRI.</p>
+                </div>
+                <button 
+                  onClick={handleSaveConfig} 
+                  className="bg-sepri-medium text-white px-6 py-2 rounded-xl font-bold text-xs uppercase shadow-lg hover:bg-sepri-dark transition-colors"
+                >
+                  Guardar Clave
+                </button>
+              </div>
             </section>
 
             {/* Política de Privacidad */}

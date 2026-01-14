@@ -110,6 +110,7 @@ export interface ContactInfo {
   heroImageUrl?: string;
   privacyPolicy?: string; 
   teamMembers?: TeamMember[]; 
+  geminiApiKey?: string;
 }
 
 export interface FormField {

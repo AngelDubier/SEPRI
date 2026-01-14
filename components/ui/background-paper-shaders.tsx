@@ -76,7 +76,7 @@ export function ShaderPlane({
     [color1, color2],
   )
 
-  useFrame((state) => {
+  useFrame((state: any) => {
     if (mesh.current) {
       uniforms.time.value = state.clock.elapsedTime * 0.5
       uniforms.intensity.value = 0.5 + Math.sin(state.clock.elapsedTime) * 0.1
@@ -111,7 +111,7 @@ export function EnergyRing({
   const RingGeometryTag = 'ringGeometry' as any
   const MeshBasicMaterialTag = 'meshBasicMaterial' as any
 
-  useFrame((state) => {
+  useFrame((state: any) => {
     if (mesh.current) {
       mesh.current.rotation.z = state.clock.elapsedTime * 0.2
       if (mesh.current.material instanceof THREE.MeshBasicMaterial) {

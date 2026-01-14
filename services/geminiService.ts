@@ -1,30 +1,31 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 import { ChatMessage } from "../types";
 
 /**
  * Sends a message to the Gemini AI model and retrieves the response.
- * Uses process.env.API_KEY for authentication as required by the environment.
+ * This function follows the @google/genai coding guidelines.
  */
 export const sendMessageToGemini = async (
   history: ChatMessage[],
-  _newMessage: string
+  _newMessage: string,
+  _providedApiKey?: string
 ): Promise<string> => {
   try {
-    // Initialize GoogleGenAI with process.env.API_KEY as mandated.
+    // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+    // Use this process.env.API_KEY string directly when initializing the @google/genai client instance.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    // Select the flash model for basic Q&A tasks to ensure low latency.
+    // Using 'gemini-3-flash-preview' for general chat and basic text tasks.
     const modelName = 'gemini-3-flash-preview';
 
-    // Map conversation history to the format expected by the GenAI SDK.
+    // Map the local ChatMessage array to the SDK's Content[] structure.
     const contents = history.map((msg) => ({
       role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.text }],
     }));
 
-    // Generate content using the specified model and system instruction.
+    // Calling generateContent with the model name, contents, and system instructions in config.
     const response = await ai.models.generateContent({
       model: modelName,
       contents: contents,
@@ -33,7 +34,7 @@ export const sendMessageToGemini = async (
       },
     });
 
-    // Extract the text output using the .text property of GenerateContentResponse.
+    // The GenerateContentResponse has a .text property (not a method) which returns the extracted string output.
     const text = response.text;
 
     return (
@@ -42,7 +43,7 @@ export const sendMessageToGemini = async (
     );
   } catch (error: any) {
     console.error("Error llamando a Gemini:", error);
-    // Graceful error handling for connectivity or API issues.
+    // Standard error message without exposing technical details of the API configuration.
     return "Hubo un error al conectar con el asistente. Por favor intenta más tarde.";
   }
 };

@@ -1,9 +1,8 @@
-
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Clock, Newspaper } from 'lucide-react';
-import { getNews } from '../services/dataService';
-import { NewsItem } from '../types';
+import { getNews } from './services/dataService';
+import { NewsItem } from './types';
 
 const NewsPage: React.FC = () => {
   const [newsList, setNewsList] = useState<NewsItem[]>([]);
