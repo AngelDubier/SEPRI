@@ -437,6 +437,10 @@ const AdminLogin: React.FC = () => {
                     <label className="text-xs font-black uppercase text-gray-400">Descripción</label>
                     <textarea placeholder="Descripción del protocolo..." className="w-full border p-3 rounded-xl outline-none" rows={2} value={currentProtocol.description || ''} onChange={e => setCurrentProtocol({...currentProtocol, description: e.target.value})} />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black uppercase text-gray-400">Documento General del Protocolo (URL)</label>
+                    <input type="text" placeholder="https://drive.google.com/..." className="w-full border p-3 rounded-xl outline-none" value={currentProtocol.documentUrl || ''} onChange={e => setCurrentProtocol({...currentProtocol, documentUrl: e.target.value})} />
+                  </div>
                   <div className="flex items-center gap-6 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
                     <div className="w-24 h-24 bg-white border rounded overflow-hidden flex-shrink-0 flex items-center justify-center shadow-sm">
                       {currentProtocol.imageUrl ? <img src={currentProtocol.imageUrl} className="w-full h-full object-cover" /> : <ImageIcon className="text-gray-300" size={32} />}
@@ -467,10 +471,15 @@ const AdminLogin: React.FC = () => {
                                <button onClick={() => handleRemoveStep(step.id)} className="text-red-400 p-2 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
                             </div>
                             <input type="text" placeholder="Descripción corta" className="w-full border p-2 rounded text-sm outline-none" value={step.description} onChange={e => handleUpdateStep(step.id, 'description', e.target.value)} />
-                            <div className="space-y-1">
-                               <label className="text-[10px] font-black uppercase text-gray-400">Video (URL)</label>
-                               {/* Fix: Wrap handleUpdateStep in an arrow function to properly handle change events and avoid immediate execution */}
-                               <input type="text" placeholder="https://youtube.com/..." className="w-full border p-2 rounded text-xs outline-none bg-white" value={step.videoUrl || ''} onChange={e => handleUpdateStep(step.id, 'videoUrl', e.target.value)} />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                               <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-gray-400">Video (URL)</label>
+                                  <input type="text" placeholder="https://youtube.com/..." className="w-full border p-2 rounded text-xs outline-none bg-white" value={step.videoUrl || ''} onChange={e => handleUpdateStep(step.id, 'videoUrl', e.target.value)} />
+                               </div>
+                               <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-gray-400">Documento a Descargar (URL)</label>
+                                  <input type="text" placeholder="https://drive.google.com/..." className="w-full border p-2 rounded text-xs outline-none bg-white" value={step.downloadUrl || ''} onChange={e => setCurrentProtocol({ ...currentProtocol, baseSteps: currentProtocol.baseSteps?.map(s => s.id === step.id ? { ...s, downloadUrl: e.target.value, isDownloadable: !!e.target.value.trim() } : s) })} />
+                               </div>
                             </div>
                          </div>
                        ))}
