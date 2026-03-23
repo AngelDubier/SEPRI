@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Download, CheckCircle, AlertCircle, FileText, Plus, Save, Clock, Edit2, File, AlertTriangle, Info, Video, ChevronRight, Share2, Loader2, X } from 'lucide-react';
@@ -140,7 +139,12 @@ const EventProcessPage: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-start gap-6">
             <div className="max-w-3xl">
               <h1 className="text-4xl md:text-5xl font-black mb-4 leading-tight">{event.title}</h1>
-              <p className="text-lg text-blue-100/80 leading-relaxed">{event.description}</p>
+              <p className="text-lg text-blue-100/80 leading-relaxed mb-6">{event.description}</p>
+              {event.documentUrl && (
+                <button onClick={() => window.open(event.documentUrl, '_blank')} className="inline-flex items-center px-6 py-3 bg-sepri-yellow text-sepri-dark rounded-xl text-sm font-black uppercase tracking-widest hover:bg-white transition-all shadow-lg">
+                  <Download size={18} className="mr-2" /> DESCARGAR PROTOCOLO GENERAL
+                </button>
+              )}
             </div>
           </div>
         </div>
