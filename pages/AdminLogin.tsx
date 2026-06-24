@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Lock, LogOut, Settings, Newspaper, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, User, Bell, Phone, Mail, MapPin, ArrowLeft, X, Eye, EyeOff, Shield, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Lock, LogOut, Settings, Newspaper, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, User, Bell, Phone, Mail, MapPin, ArrowLeft, X, Eye, EyeOff, Shield, MessageSquare, BarChart2, Users, Clock, Download, Map as MapIcon, Calendar, Activity, ChevronDown } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { format, subDays } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { DEFAULT_CONTACT_INFO } from '../constants';
 import { UserRole, NewsItem, EventType, ContactInfo, PopupConfig, QuickLink, TeamMember, Step } from '../types';
-import { getNews, saveNews, getEvents, saveEvents, addEvent, deleteEvent, getContactInfo, saveContactInfo, authenticateUser, getPopups, savePopups, getQuickLinks, saveQuickLinks } from '../services/dataService';
+import { getNews, saveNews, getEvents, saveEvents, addEvent, deleteEvent, getContactInfo, saveContactInfo, authenticateUser, getPopups, savePopups, getQuickLinks, saveQuickLinks, getAnalytics, AnalyticsRecord } from '../services/dataService';
 import { Button as MovingBorderButton } from '../components/ui/moving-border';
 
 const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 600): Promise<string> => {
@@ -34,12 +37,13 @@ const AdminLogin: React.FC = () => {
   const [showApiKey, setShowApiKey] = useState(false);
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'news' | 'protocols' | 'config'>('news');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'news' | 'protocols' | 'config'>('dashboard');
   const [news, setNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<EventType[]>([]);
   const [contactInfo, setContactInfo] = useState<ContactInfo>(DEFAULT_CONTACT_INFO);
   const [popups, setPopups] = useState<PopupConfig[]>([]);
   const [quickLinks, setQuickLinks] = useState<QuickLink[]>([]);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsRecord[]>([]);
 
   // States for sub-editors
   const [isEditingNews, setIsEditingNews] = useState(false);
@@ -55,6 +59,93 @@ const AdminLogin: React.FC = () => {
   const [editingQuickLinkId, setEditingQuickLinkId] = useState<string | null>(null);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
+  // Dashboard Filters State
+  const [dashboardDateRange, setDashboardDateRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+
+  // REAL DATA FOR DASHBOARD
+  const { trafficData, locationData, downloadsData, totals, insight } = useMemo(() => {
+    const days = dashboardDateRange === '7d' ? 7 : dashboardDateRange === '30d' ? 30 : dashboardDateRange === '90d' ? 90 : 180;
+    const cutoffDate = subDays(new Date(), days);
+    
+    const filteredRecords = dashboardDateRange === 'all' 
+      ? analyticsData 
+      : analyticsData.filter(r => new Date(r.date) >= cutoffDate);
+
+    const trafficMap = new Map<string, any>();
+    if (dashboardDateRange !== 'all') {
+      for (let i = days - 1; i >= 0; i--) {
+        const d = subDays(new Date(), i);
+        const dStr = format(d, 'MMM dd', { locale: es });
+        const isoStr = format(d, 'yyyy-MM-dd');
+        trafficMap.set(isoStr, { date: dStr, visitas: 0, unicos: 0 });
+      }
+    }
+    
+    filteredRecords.forEach(r => {
+      const dStr = format(new Date(r.date), 'MMM dd', { locale: es });
+      if (trafficMap.has(r.date)) {
+        const item = trafficMap.get(r.date);
+        item.visitas += r.visits;
+        item.unicos += r.uniqueVisitors;
+      } else if (dashboardDateRange === 'all') {
+        trafficMap.set(r.date, { date: dStr, visitas: r.visits, unicos: r.uniqueVisitors });
+      }
+    });
+
+    const tData = Array.from(trafficMap.values());
+    if (dashboardDateRange === 'all') {
+      tData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+
+    const locMap: Record<string, number> = {};
+    const dlMap: Record<string, number> = {};
+    
+    let totalVisits = 0;
+    let totalUniques = 0;
+    let totalTime = 0;
+
+    filteredRecords.forEach(r => {
+      totalVisits += r.visits;
+      totalUniques += r.uniqueVisitors;
+      totalTime += r.timeSpentSeconds;
+      Object.entries(r.locations || {}).forEach(([loc, count]) => { locMap[loc] = (locMap[loc] || 0) + count; });
+      Object.entries(r.downloads || {}).forEach(([dl, count]) => { dlMap[dl] = (dlMap[dl] || 0) + count; });
+    });
+
+    const lData = Object.entries(locMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 5);
+    const dData = Object.entries(dlMap).map(([name, downloads]) => ({ name, downloads })).sort((a, b) => b.downloads - a.downloads).slice(0, 5);
+      
+    const avgSeconds = totalUniques > 0 ? Math.floor(totalTime / totalUniques) : 0;
+    const mins = Math.floor(avgSeconds / 60).toString().padStart(2, '0');
+    const secs = (avgSeconds % 60).toString().padStart(2, '0');
+
+    let insightTitle = "Aún no hay suficientes datos para generar insights";
+    let insightDesc = "A medida que los usuarios interactúen con la plataforma y descarguen formatos, el sistema generará recomendaciones automáticas aquí.";
+
+    if (dData.length > 0) {
+      const topDownload = dData[0];
+      insightTitle = `El documento "${topDownload.name}" es el más solicitado`;
+      insightDesc = `Basado en las métricas actuales, los usuarios están descargando frecuentemente este formato (${topDownload.downloads} descargas). Se recomienda mantener su contenido actualizado y publicar noticias relevantes al respecto.`;
+    } else if (lData.length > 0) {
+      const topLocation = lData[0];
+      insightTitle = `La mayoría del tráfico proviene de ${topLocation.name}`;
+      insightDesc = `Tus usuarios principales se conectan desde ${topLocation.name} (${topLocation.value} visitas). Podrías considerar redactar noticias o actualizaciones específicas para esta región.`;
+    } else if (totalVisits > 0) {
+      insightTitle = `El portal está recibiendo tráfico`;
+      insightDesc = `Se han registrado ${totalVisits} visitas en el periodo seleccionado. Sigue monitoreando para obtener más recomendaciones automatizadas.`;
+    }
+
+    return {
+      trafficData: tData,
+      locationData: lData,
+      downloadsData: dData,
+      totals: { visits: totalVisits, uniques: totalUniques, avgTime: `${mins}:${secs}`, totalDownloads: Object.values(dlMap).reduce((a,b)=>a+b,0) },
+      insight: { title: insightTitle, description: insightDesc }
+    };
+  }, [dashboardDateRange, analyticsData]);
+
+  const COLORS = ['#164E87', '#FFB000', '#2ECC71', '#E74C3C', '#9B59B6'];
+
   useEffect(() => {
     const storedRole = localStorage.getItem('sepri_user_role');
     if (storedRole && (storedRole === 'ADMIN' || storedRole === 'CREATOR')) {
@@ -69,6 +160,7 @@ const AdminLogin: React.FC = () => {
     setEvents(await getEvents());
     setPopups(await getPopups());
     setQuickLinks(await getQuickLinks());
+    setAnalyticsData(getAnalytics());
     const contact = await getContactInfo();
     if(contact) setContactInfo(contact);
   };
@@ -362,6 +454,7 @@ const AdminLogin: React.FC = () => {
           <h1 className="font-bold text-lg">Panel SEPRI</h1>
         </div>
         <nav className="space-y-2">
+          <button onClick={() => setActiveTab('dashboard')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'dashboard' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><BarChart2 size={18} /> Panel Principal</button>
           <button onClick={() => setActiveTab('news')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'news' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><Newspaper size={18} /> Noticias</button>
           <button onClick={() => setActiveTab('protocols')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'protocols' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><Briefcase size={18} /> Protocolos</button>
           <button onClick={() => setActiveTab('config')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'config' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><Settings size={18} /> Configuración</button>
@@ -370,6 +463,185 @@ const AdminLogin: React.FC = () => {
       </div>
 
       <div className="flex-1 p-8 overflow-y-auto h-full bg-gray-50">
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6 pb-24">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
+              <div>
+                <h2 className="text-2xl font-bold text-sepri-dark">Resumen de Actividad</h2>
+                <p className="text-sm text-gray-500">Métricas principales de uso y visitas al portal SEPRI</p>
+              </div>
+              <div className="flex items-center gap-2 bg-white border rounded-lg p-1 shadow-sm">
+                <Calendar size={16} className="text-gray-400 ml-2" />
+                <select 
+                  className="bg-transparent border-none outline-none text-sm font-medium p-2 text-gray-700 cursor-pointer"
+                  value={dashboardDateRange}
+                  onChange={(e) => setDashboardDateRange(e.target.value as any)}
+                >
+                  <option value="7d">Últimos 7 días</option>
+                  <option value="30d">Últimos 30 días</option>
+                  <option value="90d">Últimos 3 meses</option>
+                  <option value="all">Historico Total</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Top Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Users size={24} /></div>
+                  <span className="text-xs font-bold text-green-500 bg-green-50 px-2 py-1 rounded-md">Real</span>
+                </div>
+                <div>
+                  <h4 className="text-gray-500 text-sm font-medium">Visitas Totales</h4>
+                  <p className="text-3xl font-black text-sepri-dark">{totals.visits.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl"><Activity size={24} /></div>
+                  <span className="text-xs font-bold text-green-500 bg-green-50 px-2 py-1 rounded-md">Real</span>
+                </div>
+                <div>
+                  <h4 className="text-gray-500 text-sm font-medium">Usuarios Únicos</h4>
+                  <p className="text-3xl font-black text-sepri-dark">{totals.uniques.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-orange-50 text-orange-600 rounded-xl"><Clock size={24} /></div>
+                  <span className="text-xs font-bold text-green-500 bg-green-50 px-2 py-1 rounded-md">Real</span>
+                </div>
+                <div>
+                  <h4 className="text-gray-500 text-sm font-medium">Tiempo Promedio</h4>
+                  <p className="text-3xl font-black text-sepri-dark">{totals.avgTime} <span className="text-sm font-medium text-gray-400">min</span></p>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-green-50 text-green-600 rounded-xl"><Download size={24} /></div>
+                  <span className="text-xs font-bold text-green-500 bg-green-50 px-2 py-1 rounded-md">Real</span>
+                </div>
+                <div>
+                  <h4 className="text-gray-500 text-sm font-medium">Descargas Totales</h4>
+                  <p className="text-3xl font-black text-sepri-dark">{totals.totalDownloads.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Main Traffic Chart */}
+              <div className="lg:col-span-2 bg-white p-6 rounded-2xl border shadow-sm">
+                <h3 className="font-bold text-lg mb-6 text-sepri-dark">Tráfico a lo largo del tiempo</h3>
+                <div className="h-80 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trafficData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorVisitas" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#164E87" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#164E87" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorUnicos" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#FFB000" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#FFB000" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
+                      <RechartsTooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        labelStyle={{ fontWeight: 'bold', color: '#374151', marginBottom: '8px' }}
+                      />
+                      <Area type="monotone" dataKey="visitas" name="Visitas" stroke="#164E87" strokeWidth={3} fillOpacity={1} fill="url(#colorVisitas)" />
+                      <Area type="monotone" dataKey="unicos" name="Usuarios Únicos" stroke="#FFB000" strokeWidth={3} fillOpacity={1} fill="url(#colorUnicos)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Locations Pie Chart */}
+              <div className="bg-white p-6 rounded-2xl border shadow-sm">
+                <h3 className="font-bold text-lg mb-6 text-sepri-dark flex items-center gap-2"><MapIcon size={20} className="text-sepri-medium"/> Origen del Tráfico</h3>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={locationData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {locationData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {locationData.length > 0 ? locationData.slice(0,4).map((loc, idx) => (
+                    <div key={loc.name} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[idx] }}></div>
+                        <span className="text-gray-600 font-medium">{loc.name}</span>
+                      </div>
+                      <span className="font-bold text-sepri-dark">{loc.value.toLocaleString()}</span>
+                    </div>
+                  )) : <p className="text-center text-sm text-gray-400 mt-6">Sin datos recientes</p>}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Downloads Bar Chart */}
+              <div className="bg-white p-6 rounded-2xl border shadow-sm">
+                <h3 className="font-bold text-lg mb-6 text-sepri-dark flex items-center gap-2"><FileText size={20} className="text-sepri-medium"/> Top Documentos Descargados</h3>
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={downloadsData} layout="vertical" margin={{ top: 0, right: 0, left: 30, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
+                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
+                      <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#374151', fontWeight: 600 }} width={120} />
+                      <RechartsTooltip 
+                        cursor={{fill: '#F3F4F6'}}
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Bar dataKey="downloads" name="Descargas" fill="#164E87" radius={[0, 6, 6, 0]} barSize={24} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {downloadsData.length === 0 && <p className="text-center text-sm text-gray-400 mt-6 -translate-y-40">Sin datos de descargas recientes</p>}
+                </div>
+              </div>
+              
+              {/* Info / Tips Card */}
+              <div className="bg-gradient-to-br from-sepri-dark to-sepri-medium p-8 rounded-2xl shadow-sm text-white flex flex-col justify-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-10"><Activity size={160} /></div>
+                <div className="relative z-10">
+                  <div className="inline-flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-6 backdrop-blur-md">
+                    <Activity size={14} /> Insights Automáticos
+                  </div>
+                  <h3 className="text-2xl font-black mb-4">{insight.title}</h3>
+                  <p className="text-blue-100 leading-relaxed mb-8">
+                    {insight.description}
+                  </p>
+                  <button onClick={() => setActiveTab('news')} className="bg-white text-sepri-dark px-6 py-3 rounded-xl font-bold text-sm shadow-xl hover:bg-gray-50 transition-colors">
+                    Ir a Redactar Noticia
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'news' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
