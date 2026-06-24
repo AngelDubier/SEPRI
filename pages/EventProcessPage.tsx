@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Download, CheckCircle, AlertCircle, FileText, Plus, Save, Clock, Edit2, File, AlertTriangle, Info, Video, ChevronRight, Share2, Loader2, X } from 'lucide-react';
 import { EXTRA_STEPS } from '../constants';
 import { Step, UserRole, FormTemplate, EventType, ProtocolAlert } from '../types';
-import { getEvents, updateEventStep, getForms } from '../services/dataService';
+import { getEvents, updateEventStep, getForms, trackDownload } from '../services/dataService';
 
 const EventProcessPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -79,11 +79,12 @@ const EventProcessPage: React.FC = () => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
   };
 
-  const handleDownload = (stepId: string, url?: string) => {
+  const handleDownload = (stepId: string, url?: string, stepTitle?: string) => {
     if (url && url.trim() !== '') {
       const newDownloads = new Set(downloadedItems);
       newDownloads.add(stepId);
       setDownloadedItems(newDownloads);
+      trackDownload(stepTitle || stepId);
       window.open(url, '_blank');
     } else {
       alert("No hay un formato configurado para este paso.");
@@ -141,7 +142,7 @@ const EventProcessPage: React.FC = () => {
               <h1 className="text-4xl md:text-5xl font-black mb-4 leading-tight">{event.title}</h1>
               <p className="text-lg text-blue-100/80 leading-relaxed mb-6">{event.description}</p>
               {event.documentUrl && (
-                <button onClick={() => window.open(event.documentUrl, '_blank')} className="inline-flex items-center px-6 py-3 bg-sepri-yellow text-sepri-dark rounded-xl text-sm font-black uppercase tracking-widest hover:bg-white transition-all shadow-lg">
+                <button onClick={() => { trackDownload(`Protocolo General: ${event.title}`); window.open(event.documentUrl, '_blank'); }} className="inline-flex items-center px-6 py-3 bg-sepri-yellow text-sepri-dark rounded-xl text-sm font-black uppercase tracking-widest hover:bg-white transition-all shadow-lg">
                   <Download size={18} className="mr-2" /> DESCARGAR PROTOCOLO GENERAL
                 </button>
               )}
@@ -220,7 +221,7 @@ const EventProcessPage: React.FC = () => {
                         <p className="text-gray-500 text-sm leading-relaxed mb-6">{step.description}</p>
                         <div className="flex flex-wrap gap-3">
                           {step.isDownloadable && step.downloadUrl && (
-                            <button onClick={() => handleDownload(step.id, step.downloadUrl)} className={`inline-flex items-center px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${downloadedItems.has(step.id) ? 'bg-sepri-green text-white' : 'bg-sepri-medium/10 text-sepri-medium hover:bg-sepri-medium hover:text-white'}`}>
+                            <button onClick={() => handleDownload(step.id, step.downloadUrl, step.title)} className={`inline-flex items-center px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${downloadedItems.has(step.id) ? 'bg-sepri-green text-white' : 'bg-sepri-medium/10 text-sepri-medium hover:bg-sepri-medium hover:text-white'}`}>
                               <Download size={16} className="mr-2" /> OBTENER FORMATO
                             </button>
                           )}
