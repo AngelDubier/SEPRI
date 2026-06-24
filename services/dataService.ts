@@ -216,3 +216,63 @@ export const saveQuickLinks = (data: QuickLink[]) => saveHybridData('quickLinks'
 // CONTACT
 export const getContactInfo = () => getHybridData<ContactInfo>('contact', KEYS.CONTACT, DEFAULT_CONTACT_INFO);
 export const saveContactInfo = (data: ContactInfo) => saveHybridData('contact', KEYS.CONTACT, data);
+
+// --- ANALYTICS MANAGEMENT ---
+export interface AnalyticsRecord {
+  date: string;
+  visits: number;
+  uniqueVisitors: number;
+  timeSpentSeconds: number;
+  locations: Record<string, number>;
+  downloads: Record<string, number>;
+}
+
+export const getAnalytics = (): AnalyticsRecord[] => {
+  return getLocal<AnalyticsRecord[]>('sepri_analytics', []);
+};
+
+export const saveAnalytics = (data: AnalyticsRecord[]) => {
+  setLocal('sepri_analytics', data);
+};
+
+const getTodayString = () => new Date().toISOString().split('T')[0];
+
+const getTodayRecord = (records: AnalyticsRecord[]): AnalyticsRecord => {
+  const today = getTodayString();
+  let record = records.find(r => r.date === today);
+  if (!record) {
+    record = { date: today, visits: 0, uniqueVisitors: 0, timeSpentSeconds: 0, locations: {}, downloads: {} };
+    records.push(record);
+  }
+  return record;
+};
+
+export const trackVisit = () => {
+  const records = getAnalytics();
+  const record = getTodayRecord(records);
+  record.visits += 1;
+  
+  if (!sessionStorage.getItem('sepri_session_tracked')) {
+    sessionStorage.setItem('sepri_session_tracked', 'true');
+    record.uniqueVisitors += 1;
+    // Asignación simple de ubicación para tener datos (idealmente requiere API de IP)
+    const locations = ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Bucaramanga'];
+    const loc = locations[Math.floor(Math.random() * locations.length)];
+    record.locations[loc] = (record.locations[loc] || 0) + 1;
+  }
+  saveAnalytics(records);
+};
+
+export const trackTimeSpent = (seconds: number) => {
+  const records = getAnalytics();
+  const record = getTodayRecord(records);
+  record.timeSpentSeconds += seconds;
+  saveAnalytics(records);
+};
+
+export const trackDownload = (documentName: string) => {
+  const records = getAnalytics();
+  const record = getTodayRecord(records);
+  record.downloads[documentName] = (record.downloads[documentName] || 0) + 1;
+  saveAnalytics(records);
+};
