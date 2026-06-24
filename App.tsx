@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { Canvas } from '@react-three/fiber';
 import Header from './components/Header.tsx';
@@ -11,6 +11,7 @@ import EventProcessPage from './pages/EventProcessPage.tsx';
 import AdminLogin from './pages/AdminLogin.tsx';
 import { FormatsPage, ReportIncidentPage, DirectoryPage, PrivacyPage } from './pages/FooterPages.tsx';
 import { ShaderPlane, EnergyRing } from './components/ui/background-paper-shaders.tsx';
+import { trackVisit, trackTimeSpent } from './services/dataService';
 
 // Layout component to centrally manage global UI elements
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -39,6 +40,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 const App: React.FC = () => {
+  useEffect(() => {
+    trackVisit();
+    const interval = setInterval(() => {
+      trackTimeSpent(60);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <Router>
       <Routes>
