@@ -111,13 +111,19 @@ export interface ContactInfo {
   privacyPolicy?: string; 
   teamMembers?: TeamMember[]; 
   geminiApiKey?: string;
+  notificationEmail?: string; // Correo destino configurable para formularios de contacto
+  resendApiKey?: string;      // Clave API de Resend configurable dinámicamente
 }
 
 export interface FormField {
   id: string;
   label: string;
-  type: 'text' | 'textarea' | 'checkbox';
+  type: 'text' | 'email' | 'phone' | 'date' | 'textarea'
+      | 'checkbox' | 'select' | 'number' | 'signature';
   required?: boolean;
+  placeholder?: string;
+  options?: string[];     // Para tipo 'select'
+  width?: 'full' | 'half'; // Layout responsive en grid
 }
 
 export interface FormTemplate {
@@ -126,4 +132,19 @@ export interface FormTemplate {
   title: string;
   description: string;
   fields: FormField[];
+  letterTemplate?: string;
 }
+
+// --- EMAIL SENDER TYPES ---
+
+export interface EmailSendPayload {
+  senderName: string;
+  senderEmail: string;
+  congregation?: string;
+  phone?: string;
+  subject: string;
+  additionalMessage: string;
+  context: string;
+}
+
+export type EmailSendStatus = 'idle' | 'loading' | 'success' | 'error';

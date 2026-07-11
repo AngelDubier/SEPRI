@@ -3,6 +3,7 @@ import { FileText, Shield, Loader2, Phone, Mail, MapPin, Send, AlertTriangle, Us
 import { getEvents, getContactInfo } from '../services/dataService';
 import { ContactInfo, EventType } from '../types';
 import { DEFAULT_CONTACT_INFO } from '../constants';
+import EmailSenderModal from '../components/EmailSenderModal';
 
 export const PrivacyPage: React.FC = () => {
   const [contactInfo, setContactInfo] = useState<ContactInfo | null>(null);
@@ -102,6 +103,7 @@ export const ReportIncidentPage: React.FC = () => {
     description: '',
     location: ''
   });
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   const handleSend = () => {
     const message = `REPORTE DE INCIDENTE SEPRI D22\n\nNombre: ${formData.name}\nCongregación: ${formData.congregation}\nTipo: ${formData.incidentType}\nUbicación: ${formData.location}\nDescripción: ${formData.description}`;
@@ -173,12 +175,36 @@ export const ReportIncidentPage: React.FC = () => {
             />
           </div>
 
-          <button 
-            onClick={handleSend}
-            className="w-full bg-sepri-dark text-white p-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-sepri-medium transition-all shadow-xl flex items-center justify-center gap-3"
-          >
-            <Send size={18} /> Enviar Reporte a Coordinación
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button 
+              onClick={handleSend}
+              className="flex-1 bg-sepri-dark text-white p-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-sepri-medium transition-all shadow-xl flex items-center justify-center gap-3"
+            >
+              <Send size={18} /> Enviar por WhatsApp
+            </button>
+            <button
+              onClick={() => setIsEmailModalOpen(true)}
+              className="flex-1 bg-sepri-yellow text-sepri-dark p-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-sepri-medium hover:text-white transition-all shadow-xl flex items-center justify-center gap-3"
+            >
+              <Mail size={18} /> Enviar por Email
+            </button>
+          </div>
+
+          <EmailSenderModal
+            isOpen={isEmailModalOpen}
+            onClose={() => setIsEmailModalOpen(false)}
+            context={{
+              eventTitle: 'Reporte de Incidente',
+              formatName: `Tipo: ${formData.incidentType} — Lugar: ${formData.location || 'No especificado'}`,
+              formResponses: {
+                'Nombre del Reportante': formData.name,
+                'Congregación': formData.congregation,
+                'Gravedad': formData.incidentType,
+                'Lugar del Suceso': formData.location,
+                'Descripción': formData.description,
+              },
+            }}
+          />
         </div>
       </div>
     </div>

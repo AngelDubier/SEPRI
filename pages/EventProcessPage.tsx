@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Download, CheckCircle, AlertCircle, FileText, Plus, Save, Clock, Edit2, File, AlertTriangle, Info, Video, ChevronRight, Share2, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Download, CheckCircle, AlertCircle, FileText, Plus, Edit2, AlertTriangle, Video, ChevronRight, Loader2, X, ClipboardEdit } from 'lucide-react';
 import { EXTRA_STEPS } from '../constants';
-import { Step, UserRole, FormTemplate, EventType, ProtocolAlert } from '../types';
+import { Step, UserRole, FormTemplate, EventType } from '../types';
 import { getEvents, updateEventStep, getForms, trackDownload } from '../services/dataService';
+import DynamicFormModal from '../components/DynamicFormModal';
 
 const EventProcessPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,8 +16,7 @@ const EventProcessPage: React.FC = () => {
   const [userRole, setUserRole] = useState<UserRole>('USER');
   const [editingStep, setEditingStep] = useState<Step | null>(null);
   const [availableForms, setAvailableForms] = useState<FormTemplate[]>([]);
-  const [activeForm, setActiveForm] = useState<FormTemplate | null>(null);
-  const [formResponses, setFormResponses] = useState<Record<string, string>>({});
+  const [activeDynamicForm, setActiveDynamicForm] = useState<FormTemplate | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -116,19 +116,7 @@ const EventProcessPage: React.FC = () => {
   };
 
   const handleOpenForm = (form: FormTemplate) => {
-    setActiveForm(form);
-    setFormResponses({});
-  };
-
-  const handleDownloadForm = () => {
-    if (!activeForm) return;
-    let content = `FORMULARIO: ${activeForm.title}\nEVENTO: ${event.title}\n\nRESPUESTAS:\n`;
-    activeForm.fields.forEach(field => { content += `${field.label}: ${formResponses[field.id] || 'N/A'}\n`; });
-    const element = document.createElement("a");
-    element.href = URL.createObjectURL(new Blob([content], {type: 'text/plain'}));
-    element.download = `${activeForm.title.replace(/\s+/g, '_')}.txt`;
-    element.click();
-    setActiveForm(null);
+    setActiveDynamicForm(form);
   };
 
   return (
@@ -221,9 +209,11 @@ const EventProcessPage: React.FC = () => {
                         <p className="text-gray-500 text-sm leading-relaxed mb-6">{step.description}</p>
                         <div className="flex flex-wrap gap-3">
                           {step.isDownloadable && step.downloadUrl && (
-                            <button onClick={() => handleDownload(step.id, step.downloadUrl, step.title)} className={`inline-flex items-center px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${downloadedItems.has(step.id) ? 'bg-sepri-green text-white' : 'bg-sepri-medium/10 text-sepri-medium hover:bg-sepri-medium hover:text-white'}`}>
-                              <Download size={16} className="mr-2" /> OBTENER FORMATO
-                            </button>
+                            <>
+                              <button onClick={() => handleDownload(step.id, step.downloadUrl, step.title)} className={`inline-flex items-center px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${downloadedItems.has(step.id) ? 'bg-sepri-green text-white' : 'bg-sepri-medium/10 text-sepri-medium hover:bg-sepri-medium hover:text-white'}`}>
+                                <Download size={16} className="mr-2" /> OBTENER FORMATO
+                              </button>
+                            </>
                           )}
                           {step.videoUrl && (
                             <button 
@@ -268,21 +258,14 @@ const EventProcessPage: React.FC = () => {
         </div>
       )}
 
-      {activeForm && (
-        <div className="fixed inset-0 bg-sepri-dark/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
-             <div className="flex justify-between items-center mb-6"><h3 className="text-2xl font-black text-sepri-dark">{activeForm.title}</h3><button onClick={() => setActiveForm(null)}><X size={24}/></button></div>
-             <div className="space-y-6">
-               {activeForm.fields.map(field => (
-                 <div key={field.id} className="space-y-2">
-                   <label className="block text-xs font-black uppercase tracking-widest text-gray-400">{field.label}</label>
-                   {field.type === 'textarea' ? <textarea className="w-full bg-gray-50 border p-4 rounded-2xl outline-none" rows={4} onChange={(e) => setFormResponses({...formResponses, [field.id]: e.target.value})} /> : <input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl outline-none" onChange={(e) => setFormResponses({...formResponses, [field.id]: e.target.value})} />}
-                 </div>
-               ))}
-             </div>
-             <div className="mt-10 flex gap-4"><button onClick={handleDownloadForm} className="w-full bg-sepri-dark text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">GENERAR Y DESCARGAR</button></div>
-          </div>
-        </div>
+      {/* Formulario dinámico diligenciable en línea */}
+      {activeDynamicForm && event && (
+        <DynamicFormModal
+          isOpen={activeDynamicForm !== null}
+          onClose={() => setActiveDynamicForm(null)}
+          formTemplate={activeDynamicForm}
+          eventTitle={event.title}
+        />
       )}
     </div>
   );

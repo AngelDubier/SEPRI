@@ -227,52 +227,55 @@ export interface AnalyticsRecord {
   downloads: Record<string, number>;
 }
 
-export const getAnalytics = (): AnalyticsRecord[] => {
-  return getLocal<AnalyticsRecord[]>('sepri_analytics', []);
+export const getAnalytics = async (): Promise<AnalyticsRecord[]> => {
+  return getHybridData<AnalyticsRecord[]>('analytics', 'sepri_analytics', []);
 };
 
 export const saveAnalytics = (data: AnalyticsRecord[]) => {
+  // Ya no se usa directamente desde el frontend, pero mantenemos la firma por compatibilidad si algo lo requiere
   setLocal('sepri_analytics', data);
 };
 
-const getTodayString = () => new Date().toISOString().split('T')[0];
-
-const getTodayRecord = (records: AnalyticsRecord[]): AnalyticsRecord => {
-  const today = getTodayString();
-  let record = records.find(r => r.date === today);
-  if (!record) {
-    record = { date: today, visits: 0, uniqueVisitors: 0, timeSpentSeconds: 0, locations: {}, downloads: {} };
-    records.push(record);
-  }
-  return record;
-};
-
-export const trackVisit = () => {
-  const records = getAnalytics();
-  const record = getTodayRecord(records);
-  record.visits += 1;
-  
-  if (!sessionStorage.getItem('sepri_session_tracked')) {
+export const trackVisit = async () => {
+  const isUnique = !sessionStorage.getItem('sepri_session_tracked');
+  if (isUnique) {
     sessionStorage.setItem('sepri_session_tracked', 'true');
-    record.uniqueVisitors += 1;
-    // Asignación simple de ubicación para tener datos (idealmente requiere API de IP)
-    const locations = ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Bucaramanga'];
-    const loc = locations[Math.floor(Math.random() * locations.length)];
-    record.locations[loc] = (record.locations[loc] || 0) + 1;
   }
-  saveAnalytics(records);
+
+  const locations = ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Bucaramanga'];
+  const loc = locations[Math.floor(Math.random() * locations.length)];
+
+  try {
+    await fetch('/.netlify/functions/analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'visit', isUnique, location: isUnique ? loc : undefined })
+    });
+  } catch (err) {
+    console.error('Error tracking visit:', err);
+  }
 };
 
-export const trackTimeSpent = (seconds: number) => {
-  const records = getAnalytics();
-  const record = getTodayRecord(records);
-  record.timeSpentSeconds += seconds;
-  saveAnalytics(records);
+export const trackTimeSpent = async (seconds: number) => {
+  try {
+    await fetch('/.netlify/functions/analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'time', seconds })
+    });
+  } catch (err) {
+    console.error('Error tracking time:', err);
+  }
 };
 
-export const trackDownload = (documentName: string) => {
-  const records = getAnalytics();
-  const record = getTodayRecord(records);
-  record.downloads[documentName] = (record.downloads[documentName] || 0) + 1;
-  saveAnalytics(records);
+export const trackDownload = async (documentName: string) => {
+  try {
+    await fetch('/.netlify/functions/analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'download', documentName })
+    });
+  } catch (err) {
+    console.error('Error tracking download:', err);
+  }
 };

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Lock, LogOut, Settings, Newspaper, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, User, Bell, Phone, Mail, MapPin, ArrowLeft, X, Eye, EyeOff, Shield, MessageSquare, BarChart2, Users, Clock, Download, Map as MapIcon, Calendar, Activity, ChevronDown } from 'lucide-react';
+import { Lock, LogOut, Settings, Newspaper, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, User, Bell, Phone, Mail, MapPin, ArrowLeft, X, Eye, EyeOff, Shield, MessageSquare, BarChart2, Users, Clock, Download, Map as MapIcon, Calendar, Activity, ChevronDown, ClipboardList, GripVertical, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DEFAULT_CONTACT_INFO } from '../constants';
-import { UserRole, NewsItem, EventType, ContactInfo, PopupConfig, QuickLink, TeamMember, Step } from '../types';
-import { getNews, saveNews, getEvents, saveEvents, addEvent, deleteEvent, getContactInfo, saveContactInfo, authenticateUser, getPopups, savePopups, getQuickLinks, saveQuickLinks, getAnalytics, AnalyticsRecord } from '../services/dataService';
+import { UserRole, NewsItem, EventType, ContactInfo, PopupConfig, QuickLink, TeamMember, Step, FormTemplate, FormField } from '../types';
+import { getNews, saveNews, getEvents, saveEvents, addEvent, deleteEvent, getContactInfo, saveContactInfo, authenticateUser, getPopups, savePopups, getQuickLinks, saveQuickLinks, getAnalytics, getForms, saveForms, AnalyticsRecord } from '../services/dataService';
 import { Button as MovingBorderButton } from '../components/ui/moving-border';
 
 const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 600): Promise<string> => {
@@ -35,9 +35,10 @@ const AdminLogin: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentRole, setCurrentRole] = useState<UserRole>('USER');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showResendApiKey, setShowResendApiKey] = useState(false);
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'news' | 'protocols' | 'config'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'news' | 'protocols' | 'forms' | 'config'>('dashboard');
   const [news, setNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<EventType[]>([]);
   const [contactInfo, setContactInfo] = useState<ContactInfo>(DEFAULT_CONTACT_INFO);
@@ -54,6 +55,11 @@ const AdminLogin: React.FC = () => {
   const [currentPopup, setCurrentPopup] = useState<Partial<PopupConfig>>({ title: '', content: '', type: 'info', isEnabled: true });
   const [newMember, setNewMember] = useState<Partial<TeamMember>>({ name: '', role: '' });
   const [newQuickLink, setNewQuickLink] = useState<Partial<QuickLink>>({ title: '', url: '', isEnabled: true });
+
+  // --- Form Builder State ---
+  const [forms, setForms] = useState<FormTemplate[]>([]);
+  const [selectedFormEventId, setSelectedFormEventId] = useState<string>('');
+  const [editingFormTemplate, setEditingFormTemplate] = useState<Partial<FormTemplate> | null>(null);
   
   // Edit mode tracking states
   const [editingQuickLinkId, setEditingQuickLinkId] = useState<string | null>(null);
@@ -160,7 +166,8 @@ const AdminLogin: React.FC = () => {
     setEvents(await getEvents());
     setPopups(await getPopups());
     setQuickLinks(await getQuickLinks());
-    setAnalyticsData(getAnalytics());
+    setAnalyticsData(await getAnalytics());
+    setForms(await getForms());
     const contact = await getContactInfo();
     if(contact) setContactInfo(contact);
   };
@@ -457,6 +464,7 @@ const AdminLogin: React.FC = () => {
           <button onClick={() => setActiveTab('dashboard')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'dashboard' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><BarChart2 size={18} /> Panel Principal</button>
           <button onClick={() => setActiveTab('news')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'news' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><Newspaper size={18} /> Noticias</button>
           <button onClick={() => setActiveTab('protocols')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'protocols' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><Briefcase size={18} /> Protocolos</button>
+          <button onClick={() => setActiveTab('forms')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'forms' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><ClipboardList size={18} /> Formularios</button>
           <button onClick={() => setActiveTab('config')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'config' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><Settings size={18} /> Configuración</button>
         </nav>
         <button onClick={handleLogout} className="mt-8 text-red-400 flex items-center gap-2 hover:text-red-300 px-3"><LogOut size={18} /> Salir</button>
@@ -777,6 +785,318 @@ const AdminLogin: React.FC = () => {
           </div>
         )}
 
+        {/* ═══════════════ FORMULARIOS ═══════════════ */}
+        {activeTab === 'forms' && (
+          <div className="max-w-5xl space-y-8 pb-24">
+            <div className="flex justify-between items-center border-b pb-4">
+              <div>
+                <h2 className="text-3xl font-black text-sepri-dark">Constructor de Formularios</h2>
+                <p className="text-sm text-gray-500 mt-1">Crea y edita los campos de cada formulario por protocolo. Los usuarios diligencian estos formularios en línea.</p>
+              </div>
+              <button
+                onClick={() => setEditingFormTemplate({ id: `form-${Date.now()}`, eventId: selectedFormEventId, title: '', description: '', fields: [] })}
+                className="bg-sepri-medium text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center gap-2 hover:bg-sepri-dark transition-all"
+              >
+                <Plus size={16}/> Nueva Plantilla
+              </button>
+            </div>
+
+            {/* Selector de protocolo */}
+            <div className="bg-white rounded-2xl border p-6 shadow-sm space-y-3">
+              <label className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-1.5"><Briefcase size={13}/> Filtrar por Protocolo</label>
+              <select
+                className="w-full border border-gray-200 p-3 rounded-xl text-sm outline-none bg-gray-50 focus:border-sepri-medium"
+                value={selectedFormEventId}
+                onChange={e => setSelectedFormEventId(e.target.value)}
+              >
+                <option value="">Todos los protocolos</option>
+                {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
+              </select>
+            </div>
+
+            {/* Editor de plantilla */}
+            {editingFormTemplate && (
+              <div className="bg-white rounded-3xl border-2 border-sepri-medium/30 p-8 shadow-xl space-y-6 animate-fade-in">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-black text-sepri-dark">{editingFormTemplate.id?.startsWith('form-') ? 'Nueva Plantilla' : 'Editando Plantilla'}</h3>
+                  <button onClick={() => setEditingFormTemplate(null)} className="text-gray-400 hover:text-gray-600"><X size={22}/></button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black uppercase text-gray-400">Protocolo Asociado *</label>
+                    <select
+                      className="w-full border p-3 rounded-xl text-sm outline-none"
+                      value={editingFormTemplate.eventId ?? ''}
+                      onChange={e => setEditingFormTemplate({...editingFormTemplate, eventId: e.target.value})}
+                    >
+                      <option value="">Seleccione un protocolo...</option>
+                      {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black uppercase text-gray-400">Título del Formulario *</label>
+                    <input type="text" placeholder="Ej: Registro de Asistentes" className="w-full border p-3 rounded-xl text-sm outline-none"
+                      value={editingFormTemplate.title ?? ''}
+                      onChange={e => setEditingFormTemplate({...editingFormTemplate, title: e.target.value})} />
+                  </div>
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-xs font-black uppercase text-gray-400">Descripción (opcional)</label>
+                    <textarea rows={2} placeholder="Instrucciones para el diligenciante..." className="w-full border p-3 rounded-xl text-sm outline-none resize-none"
+                      value={editingFormTemplate.description ?? ''}
+                      onChange={e => setEditingFormTemplate({...editingFormTemplate, description: e.target.value})} />
+                  </div>
+                </div>
+
+                {/* Campos del formulario */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-black text-gray-700 text-sm uppercase tracking-wide">Campos del Formulario</h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newField: FormField = { id: `field-${Date.now()}`, label: '', type: 'text', required: false, width: 'full' };
+                        setEditingFormTemplate(prev => ({...prev!, fields: [...(prev?.fields ?? []), newField]}));
+                      }}
+                      className="text-sepri-medium font-bold text-xs flex items-center gap-1 hover:text-sepri-dark transition-colors"
+                    >
+                      <Plus size={14}/> Agregar Campo
+                    </button>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-xl border divide-y">
+                    {/* Campos fijos (informativos) */}
+                    <div className="flex items-center gap-4 px-4 py-3 opacity-60">
+                      <span className="text-xs font-mono text-gray-400 w-4">•</span>
+                      <span className="text-sm font-bold text-gray-500 flex-1">Nombre del Responsable</span>
+                      <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded">Fijo · text</span>
+                      <span className="text-xs text-blue-400">Siempre obligatorio</span>
+                    </div>
+                    <div className="flex items-center gap-4 px-4 py-3 opacity-60">
+                      <span className="text-xs font-mono text-gray-400 w-4">•</span>
+                      <span className="text-sm font-bold text-gray-500 flex-1">Correo Electrónico</span>
+                      <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded">Fijo · email</span>
+                      <span className="text-xs text-blue-400">Siempre obligatorio</span>
+                    </div>
+
+                    {/* Campos configurables */}
+                    {(editingFormTemplate.fields ?? []).map((field, idx) => (
+                      <div key={field.id} className="flex items-start gap-3 px-4 py-3 hover:bg-white transition-colors">
+                        <GripVertical size={16} className="text-gray-300 mt-3.5 flex-shrink-0" />
+                        <div className="flex-1 grid grid-cols-2 gap-2">
+                          <input type="text" placeholder="Etiqueta del campo *"
+                            className="col-span-2 border p-2.5 rounded-lg text-sm outline-none"
+                            value={field.label}
+                            onChange={e => setEditingFormTemplate(prev => ({...prev!, fields: prev!.fields!.map((f, i) => i === idx ? {...f, label: e.target.value} : f)}))}
+                          />
+                          <select className="border p-2.5 rounded-lg text-sm outline-none bg-white"
+                            value={field.type}
+                            onChange={e => setEditingFormTemplate(prev => ({...prev!, fields: prev!.fields!.map((f, i) => i === idx ? {...f, type: e.target.value as FormField['type']} : f)}))}>
+                            <option value="text">Texto corto</option>
+                            <option value="email">Email</option>
+                            <option value="phone">Teléfono</option>
+                            <option value="number">Número</option>
+                            <option value="date">Fecha</option>
+                            <option value="textarea">Texto largo</option>
+                            <option value="select">Selección</option>
+                            <option value="checkbox">Casilla (Sí/No)</option>
+                            <option value="signature">✍ Firma Digital</option>
+                          </select>
+                          <select className="border p-2.5 rounded-lg text-sm outline-none bg-white"
+                            value={field.width ?? 'full'}
+                            onChange={e => setEditingFormTemplate(prev => ({...prev!, fields: prev!.fields!.map((f, i) => i === idx ? {...f, width: e.target.value as 'full' | 'half'} : f)}))}
+                          >
+                            <option value="full">Ancho completo</option>
+                            <option value="half">Mitad</option>
+                          </select>
+                          {field.type === 'select' && (
+                            <div className="col-span-2 space-y-1">
+                              <label className="text-[10px] text-gray-400 font-bold uppercase">Opciones (una por línea)</label>
+                              <textarea rows={3} placeholder="Opción 1&#10;Opción 2&#10;Opción 3"
+                                className="w-full border p-2 rounded-lg text-xs outline-none resize-none"
+                                value={(field.options ?? []).join('\n')}
+                                onChange={e => setEditingFormTemplate(prev => ({...prev!, fields: prev!.fields!.map((f, i) => i === idx ? {...f, options: e.target.value.split('\n').filter(Boolean)} : f)}))} />
+                            </div>
+                          )}
+                          <input type="text" placeholder="Placeholder (opcional)"
+                            className="col-span-2 border p-2.5 rounded-lg text-sm outline-none"
+                            value={field.placeholder ?? ''}
+                            onChange={e => setEditingFormTemplate(prev => ({...prev!, fields: prev!.fields!.map((f, i) => i === idx ? {...f, placeholder: e.target.value} : f)}))}
+                          />
+                        </div>
+                        <div className="flex flex-col items-center gap-2 mt-2">
+                          <label className="flex items-center gap-1 cursor-pointer" title="Obligatorio">
+                            <input type="checkbox" className="w-4 h-4 accent-sepri-medium"
+                              checked={field.required ?? false}
+                              onChange={e => setEditingFormTemplate(prev => ({...prev!, fields: prev!.fields!.map((f, i) => i === idx ? {...f, required: e.target.checked} : f)}))} />
+                            <span className="text-[10px] text-gray-500 font-bold">Req.</span>
+                          </label>
+                          <button type="button"
+                            onClick={() => setEditingFormTemplate(prev => ({...prev!, fields: prev!.fields!.filter((_, i) => i !== idx)}))}
+                            className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded"
+                          ><Trash2 size={15}/></button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {(editingFormTemplate.fields ?? []).length === 0 && (
+                      <div className="text-center py-8 text-gray-400 text-sm">
+                        No hay campos configurados. Haz clic en "+ Agregar Campo" para comenzar.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Editor de plantilla de carta */}
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-black text-gray-700 text-sm uppercase tracking-wide">Plantilla de Carta (PDF Adjunto)</h4>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-2">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Cuerpo de la Carta</label>
+                      <textarea 
+                        rows={10} 
+                        className="w-full border p-4 rounded-xl text-sm outline-none resize-none font-serif leading-relaxed"
+                        placeholder="Respetuosamente me dirijo a ustedes con el fin de solicitarles el favor de darnos autorización para el evento {{evento}}, que se va a realizar en la congregación..."
+                        value={editingFormTemplate.letterTemplate ?? ''}
+                        onChange={e => setEditingFormTemplate({...editingFormTemplate, letterTemplate: e.target.value})}
+                      />
+                      <p className="text-xs text-gray-400">
+                        * Puedes usar etiquetas dinámicas que se reemplazarán con las respuestas del usuario. Las fechas, firmas y el diseño oficial se añadirán automáticamente.
+                      </p>
+                    </div>
+                    
+                    <div className="bg-gray-50 p-4 rounded-xl border h-fit space-y-3">
+                      <h5 className="text-[11px] font-black text-sepri-dark uppercase tracking-widest border-b pb-2">Variables Disponibles</h5>
+                      <p className="text-[10px] text-gray-500 leading-tight">Haz clic para copiar e inserta en tu texto:</p>
+                      
+                      <div className="space-y-1.5 max-h-[250px] overflow-y-auto">
+                        <button 
+                          type="button"
+                          onClick={(e) => {
+                            navigator.clipboard.writeText('{{Nombre del Responsable}}');
+                            const btn = e.currentTarget;
+                            const original = btn.innerText;
+                            btn.innerText = '¡Copiado!';
+                            btn.classList.add('bg-sepri-medium', 'text-white');
+                            setTimeout(() => {
+                              btn.innerText = original;
+                              btn.classList.remove('bg-sepri-medium', 'text-white');
+                            }, 1000);
+                          }}
+                          className="w-full text-left bg-white border border-gray-200 p-2 rounded text-xs font-mono text-sepri-medium hover:bg-sepri-medium hover:text-white transition-colors"
+                        >
+                          {`{{Nombre del Responsable}}`}
+                        </button>
+                        {(editingFormTemplate.fields ?? []).map(f => (
+                          <button 
+                            key={f.id}
+                            type="button"
+                            onClick={(e) => {
+                              navigator.clipboard.writeText(`{{${f.label}}}`);
+                              const btn = e.currentTarget;
+                              const original = btn.innerText;
+                              btn.innerText = '¡Copiado!';
+                              btn.classList.add('bg-sepri-medium', 'text-white');
+                              setTimeout(() => {
+                                btn.innerText = original;
+                                btn.classList.remove('bg-sepri-medium', 'text-white');
+                              }, 1000);
+                            }}
+                            className="w-full text-left bg-white border border-gray-200 p-2 rounded text-xs font-mono text-sepri-medium hover:bg-sepri-medium hover:text-white transition-colors truncate"
+                            title={`Copiar {{${f.label}}}`}
+                          >
+                            {`{{${f.label}}}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!editingFormTemplate.title?.trim() || !editingFormTemplate.eventId) {
+                        alert('El protocolo y el título son obligatorios.'); return;
+                      }
+                      const updated = forms.some(f => f.id === editingFormTemplate.id)
+                        ? forms.map(f => f.id === editingFormTemplate.id ? editingFormTemplate as FormTemplate : f)
+                        : [...forms, editingFormTemplate as FormTemplate];
+                      setForms(updated);
+                      await saveForms(updated);
+                      setEditingFormTemplate(null);
+                    }}
+                    className="bg-sepri-medium text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-sepri-dark transition-all"
+                  >
+                    Guardar Formulario
+                  </button>
+                  <button type="button" onClick={() => setEditingFormTemplate(null)} className="px-6 py-3 text-gray-500 font-bold text-xs">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Lista de formularios existentes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {forms
+                .filter(f => !selectedFormEventId || f.eventId === selectedFormEventId)
+                .map(form => {
+                  const eventName = events.find(e => e.id === form.eventId)?.title ?? form.eventId;
+                  return (
+                    <div key={form.id} className="bg-white rounded-2xl border p-6 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="text-xs font-bold text-sepri-medium uppercase tracking-wide mb-1">{eventName}</p>
+                          <h4 className="font-black text-sepri-dark">{form.title}</h4>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setEditingFormTemplate(form)} className="text-blue-400 p-2 hover:bg-blue-50 rounded-lg transition-colors">
+                            <Edit2 size={15}/>
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm('¿Eliminar esta plantilla?')) return;
+                              const updated = forms.filter(f => f.id !== form.id);
+                              setForms(updated);
+                              await saveForms(updated);
+                            }}
+                            className="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={15}/>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
+                          {form.fields.length} campo{form.fields.length !== 1 ? 's' : ''}
+                        </span>
+                        {form.fields.filter(f => f.type === 'signature').length > 0 && (
+                          <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">✍ Firma</span>
+                        )}
+                        {form.fields.some(f => f.required) && (
+                          <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-medium">Campos obligatorios</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {forms.filter(f => !selectedFormEventId || f.eventId === selectedFormEventId).length === 0 && (
+                <div className="col-span-2 text-center py-16 text-gray-400">
+                  <ClipboardList size={40} className="mx-auto mb-3 opacity-30" />
+                  <p className="font-bold">No hay formularios creados aún.</p>
+                  <p className="text-sm">Haz clic en "Nueva Plantilla" para crear el primero.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'config' && (
           <div className="max-w-4xl space-y-10 pb-24">
             <h2 className="text-3xl font-black text-sepri-dark border-b pb-4">Configuración del Sistema</h2>
@@ -903,6 +1223,21 @@ const AdminLogin: React.FC = () => {
                  <input type="text" placeholder="Teléfono" className="w-full border p-3 rounded-lg" value={contactInfo.coordinatorPhone || ''} onChange={e => setContactInfo({...contactInfo, coordinatorPhone: e.target.value})} />
               </div>
               <input type="email" placeholder="Email institucional" className="w-full border p-3 rounded-lg" value={contactInfo.email || ''} onChange={e => setContactInfo({...contactInfo, email: e.target.value})} />
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-gray-400 flex items-center gap-1.5">
+                  <Mail size={13} /> Correo Destino para Formularios de Contacto
+                </label>
+                <input
+                  type="email"
+                  placeholder="correo-destino@ejemplo.com"
+                  className="w-full border p-3 rounded-lg"
+                  value={contactInfo.notificationEmail || ''}
+                  onChange={e => setContactInfo({...contactInfo, notificationEmail: e.target.value})}
+                />
+                <p className="text-[10px] text-gray-400 italic font-medium">
+                  Los emails enviados desde los formularios de contacto llegarán a esta dirección. Si está vacío, se usará el correo configurado en el servidor.
+                </p>
+              </div>
               <input type="text" placeholder="Dirección sede" className="w-full border p-3 rounded-lg" value={contactInfo.address || ''} onChange={e => setContactInfo({...contactInfo, address: e.target.value})} />
             </section>
 
@@ -929,6 +1264,28 @@ const AdminLogin: React.FC = () => {
                     </button>
                   </div>
                   <p className="text-[10px] text-gray-400 mt-2 italic font-medium">Configuración necesaria para el funcionamiento del Asistente Virtual SEPRI.</p>
+                </div>
+
+                {/* Configuración de Resend */}
+                <div>
+                  <label className="block text-xs font-black uppercase text-gray-400 mb-2">Resend API Key</label>
+                  <div className="relative">
+                    <input 
+                      type={showResendApiKey ? "text" : "password"} 
+                      className="w-full border p-3 rounded-xl outline-none pr-12" 
+                      placeholder="Ingrese la clave de API de Resend..." 
+                      value={contactInfo.resendApiKey || ''} 
+                      onChange={e => setContactInfo({...contactInfo, resendApiKey: e.target.value})} 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setShowResendApiKey(!showResendApiKey)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-sepri-medium"
+                    >
+                      {showResendApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2 italic font-medium">Clave de API necesaria para poder enviar correos institucionales.</p>
                 </div>
                 <button 
                   onClick={handleSaveConfig} 
