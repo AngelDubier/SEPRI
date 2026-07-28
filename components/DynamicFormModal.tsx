@@ -38,20 +38,26 @@ function buildEmailBody(
   responses: Record<string, string>,
   signatureBase64: string | null,
 ): string {
-  // 1. Limpiar espacios extras alrededor de las variables (hace el reemplazo más robusto)
+  // 1. Obtener el texto de la plantilla (íntegramente lo que el admin escribió)
   let text = formTemplate.letterTemplate ?? '';
+
+  // 2. Reemplazar variable del nombre del responsable (campo fijo)
   text = text.replace(/{{Nombre del Responsable}}/gi, responses[FIXED_NAME_FIELD_ID] || '__________________');
-  
+
+  // 3. Reemplazar variables de cada campo del formulario por su respuesta
   formTemplate.fields.forEach(f => {
-    // Escapar caracteres especiales del label por si acaso
-    const safeLabel = f.label.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+    // Escapar caracteres especiales del label para el regex
+    const safeLabel = f.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     text = text.replace(new RegExp(`{{\\s*${safeLabel}\\s*}}`, 'gi'), responses[f.id] || '__________________');
   });
 
-  // Reemplazar saltos de línea por <br/>
-  text = text.replace(/\\n/g, '<br/>');
+  // 4. Convertir saltos de línea en etiquetas HTML de párrafo para email
+  const bodyHtml = text
+    .split('\n')
+    .map(line => line.trim() === '' ? '<br/>' : `<p style="margin: 0 0 10px 0;">${line}</p>`)
+    .join('\n');
 
-  // 2. HTML de la firma (Sin imagen incrustada para evitar errores en clientes estrictos; la firma va adjunta como archivo)
+  // 5. Bloque de firma (igual que antes — no se modifica)
   const signatureHtml = signatureBase64
     ? `<div style="margin-top: 40px; width: 300px;">
          <p style="margin: 0; font-weight: bold; font-size: 14px; color: #000; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 5px; width: 200px;">${responses[FIXED_NAME_FIELD_ID] || 'Responsable'}</p>
@@ -63,11 +69,11 @@ function buildEmailBody(
          <p style="margin: 5px 0 0 0; font-size: 13px; color: #164E87;">Responder a: <strong>${responses[FIXED_EMAIL_FIELD_ID] || ''}</strong></p>
        </div>`;
 
-  // 3. Generar el correo completo con diseño de carta formal (Basado en la imagen)
+  // 6. Ensamblar correo: encabezado fijo (logo) + cuerpo editable + firma fija
   return `
     <div style="font-family: Arial, sans-serif; color: #000; line-height: 1.5; max-width: 700px; margin: 0 auto; background-color: #fff; padding: 20px;">
       
-      <!-- Encabezado con Logo y Título -->
+      <!-- Encabezado con Logo y Título (fijo) -->
       <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 20px;">
         <tr>
           <td width="80" valign="top">
@@ -82,27 +88,9 @@ function buildEmailBody(
         </tr>
       </table>
 
-      <!-- Cuerpo Formal -->
+      <!-- Cuerpo de la carta (100% editable por el administrador) -->
       <div style="font-size: 14px; line-height: 1.6; color: #000; text-align: justify;">
-        <p style="margin-bottom: 25px;">Lugar y fecha: <strong>${new Date().toLocaleDateString('es-CO', { dateStyle: 'long' })}</strong></p>
-        
-        <div style="margin-bottom: 30px;">
-          <p style="margin: 0;">Hermanos: &nbsp;&nbsp;&nbsp; <strong>Directivos.</strong></p>
-          <p style="margin: 0;"><strong>Distrito 22</strong></p>
-        </div>
-
-        <p style="margin-bottom: 30px;">Asunto: <strong>Solicitud de autorización para ${eventTitle}</strong></p>
-
-        <p style="margin-bottom: 25px;">Cordial saludo, en el nombre del Señor Jesús.</p>
-
-        <!-- Texto dinámico de la plantilla -->
-        <div style="margin-bottom: 30px;">
-          ${text || '<p style="color: #999;"><em>(No se configuró una plantilla para este protocolo en el panel de administrador).</em></p>'}
-        </div>
-
-        <p style="margin-bottom: 20px;">En espera de una respuesta positiva a nuestra solicitud.</p>
-        
-        <p style="margin-bottom: 50px;">Deseo que la gracia y la misericordia del Señor Jesús sea con cada uno y sus familias.</p>
+        ${bodyHtml || '<p style="color: #999;"><em>(No se configuró una plantilla para este formulario en el panel de administrador).</em></p>'}
 
         <!-- Firma -->
         ${signatureHtml}

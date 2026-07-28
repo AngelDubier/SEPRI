@@ -865,20 +865,6 @@ const AdminLogin: React.FC = () => {
                   </div>
 
                   <div className="bg-gray-50 rounded-xl border divide-y">
-                    {/* Campos fijos (informativos) */}
-                    <div className="flex items-center gap-4 px-4 py-3 opacity-60">
-                      <span className="text-xs font-mono text-gray-400 w-4">•</span>
-                      <span className="text-sm font-bold text-gray-500 flex-1">Nombre del Responsable</span>
-                      <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded">Fijo · text</span>
-                      <span className="text-xs text-blue-400">Siempre obligatorio</span>
-                    </div>
-                    <div className="flex items-center gap-4 px-4 py-3 opacity-60">
-                      <span className="text-xs font-mono text-gray-400 w-4">•</span>
-                      <span className="text-sm font-bold text-gray-500 flex-1">Correo Electrónico</span>
-                      <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded">Fijo · email</span>
-                      <span className="text-xs text-blue-400">Siempre obligatorio</span>
-                    </div>
-
                     {/* Campos configurables */}
                     {(editingFormTemplate.fields ?? []).map((field, idx) => (
                       <div key={field.id} className="flex items-start gap-3 px-4 py-3 hover:bg-white transition-colors">
@@ -955,16 +941,34 @@ const AdminLogin: React.FC = () => {
                   
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-2">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Cuerpo de la Carta</label>
+                      <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Cuerpo Completo de la Carta</label>
                       <textarea 
-                        rows={10} 
-                        className="w-full border p-4 rounded-xl text-sm outline-none resize-none font-serif leading-relaxed"
-                        placeholder="Respetuosamente me dirijo a ustedes con el fin de solicitarles el favor de darnos autorización para el evento {{evento}}, que se va a realizar en la congregación..."
+                        rows={18} 
+                        className="w-full border p-4 rounded-xl text-sm outline-none resize-y font-serif leading-relaxed"
+                        placeholder={
+`Lugar y fecha: [se coloca automáticamente]
+
+Hermanos Directivos.
+Distrito 22
+
+Asunto: Solicitud de autorización para {{Nombre del evento}}
+
+Cordial saludo, en el nombre del Señor Jesús.
+
+Respetuosamente me dirijo a ustedes con el fin de solicitarles la autorización para el evento {{Nombre del evento}}, que se va a realizar el día {{Fecha del programa}} en la congregación {{Nombre de la congregacion}} con un aforo de {{Aforo}}.
+
+En espera de una respuesta positiva a nuestra solicitud.
+
+Deseo que la gracia y la misericordia del Señor Jesús sea con cada uno y sus familias.
+
+Atentamente,
+{{Nombre del Responsable}}
+Pastor / Directivo`}
                         value={editingFormTemplate.letterTemplate ?? ''}
                         onChange={e => setEditingFormTemplate({...editingFormTemplate, letterTemplate: e.target.value})}
                       />
                       <p className="text-xs text-gray-400">
-                        * Puedes usar etiquetas dinámicas que se reemplazarán con las respuestas del usuario. Las fechas, firmas y el diseño oficial se añadirán automáticamente.
+                        * Escribe el texto completo de la carta. Usa etiquetas como <code className="bg-gray-100 px-1 rounded font-mono">{'{{Etiqueta del campo}}'}</code> para insertar respuestas del formulario. El encabezado con el logo, la fecha actual y la firma adjunta se añaden automáticamente.
                       </p>
                     </div>
                     
