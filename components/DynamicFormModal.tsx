@@ -19,10 +19,7 @@ export interface DynamicFormModalProps {
   eventTitle: string;
 }
 
-// ─── Campos de correo fijos (siempre presentes) ───────────────────────────────
-const FIXED_EMAIL_FIELD_ID = '__sender_email__';
-const FIXED_NAME_FIELD_ID  = '__sender_name__';
-const FIXED_CONGREGATION_FIELD_ID = '__congregation__';
+// ─── No hay campos de correo fijos, todo es dinámico ─────────────────────────
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getInputType(fieldType: FormField['type']): string {
@@ -38,42 +35,41 @@ function buildEmailBody(
   responses: Record<string, string>,
   signatureBase64: string | null,
 ): string {
-  // 1. Obtener el texto de la plantilla (íntegramente lo que el admin escribió)
   let text = formTemplate.letterTemplate ?? '';
 
-  // 2. Reemplazar variable del nombre del responsable (campo fijo)
-  text = text.replace(/{{Nombre del Responsable}}/gi, responses[FIXED_NAME_FIELD_ID] || '__________________');
-
-  // 3. Reemplazar variables de cada campo del formulario por su respuesta
+  // Reemplazar variables de cada campo del formulario por su respuesta
   formTemplate.fields.forEach(f => {
-    // Escapar caracteres especiales del label para el regex
     const safeLabel = f.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     text = text.replace(new RegExp(`{{\\s*${safeLabel}\\s*}}`, 'gi'), responses[f.id] || '__________________');
   });
 
-  // 4. Convertir saltos de línea en etiquetas HTML de párrafo para email
   const bodyHtml = text
     .split('\n')
     .map(line => line.trim() === '' ? '<br/>' : `<p style="margin: 0 0 10px 0;">${line}</p>`)
     .join('\n');
 
-  // 5. Bloque de firma (igual que antes — no se modifica)
+  // Buscar heurísticamente congregación y correo para el encabezado/pie de página
+  const congregationField = formTemplate.fields.find(f => f.label.toLowerCase().includes('congregaci'));
+  const congregationName = congregationField ? (responses[congregationField.id] || 'NOMBRE DE LA CONGREGACIÓN') : 'NOMBRE DE LA CONGREGACIÓN';
+
+  const emailField = formTemplate.fields.find(f => f.type === 'email');
+  const senderEmail = emailField ? responses[emailField.id] : '';
+
+  // La firma ya no impone el nombre ni "Pastor / Directivo" porque el admin lo pone en la plantilla.
+  // Solo se inyecta el "Responder a" y el aviso de que hay firma manuscrita.
   const signatureHtml = signatureBase64
-    ? `<div style="margin-top: 40px; width: 300px;">
-         <p style="margin: 0; font-weight: bold; font-size: 14px; color: #000; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 5px; width: 200px;">${responses[FIXED_NAME_FIELD_ID] || 'Responsable'}</p>
-         <p style="margin: 0; font-size: 13px; color: #555;">Pastor / Directivo</p>
-         <p style="margin: 5px 0 0 0; font-size: 13px; color: #164E87;">Responder a: <strong>${responses[FIXED_EMAIL_FIELD_ID] || ''}</strong></p>
+    ? `<div style="margin-top: 40px;">
+         ${senderEmail ? `<p style="margin: 5px 0 0 0; font-size: 13px; color: #164E87;">Responder a: <strong>${senderEmail}</strong></p>` : ''}
          <p style="margin: 5px 0 0 0; font-size: 11px; color: #888; font-style: italic;">(La firma manuscrita se encuentra adjunta a este correo)</p>
        </div>`
-    : `<div style="margin-top: 40px;">
-         <p style="margin: 5px 0 0 0; font-size: 13px; color: #164E87;">Responder a: <strong>${responses[FIXED_EMAIL_FIELD_ID] || ''}</strong></p>
-       </div>`;
+    : (senderEmail ? `<div style="margin-top: 40px;">
+         <p style="margin: 5px 0 0 0; font-size: 13px; color: #164E87;">Responder a: <strong>${senderEmail}</strong></p>
+       </div>` : '');
 
-  // 6. Ensamblar correo: encabezado fijo (logo) + cuerpo editable + firma fija
   return `
     <div style="font-family: Arial, sans-serif; color: #000; line-height: 1.5; max-width: 700px; margin: 0 auto; background-color: #fff; padding: 20px;">
       
-      <!-- Encabezado con Logo y Título (fijo) -->
+      <!-- Encabezado con Logo y Título -->
       <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 20px;">
         <tr>
           <td width="80" valign="top">
@@ -82,7 +78,7 @@ function buildEmailBody(
             </div>
           </td>
           <td valign="middle" style="padding-left: 15px;">
-            <div style="font-weight: bold; font-size: 18px; margin-top: 5px; color: #164E87;">${responses[FIXED_CONGREGATION_FIELD_ID] || 'NOMBRE DE LA CONGREGACIÓN'}</div>
+            <div style="font-weight: bold; font-size: 18px; margin-top: 5px; color: #164E87;">${congregationName}</div>
             <p style="margin: 0; color: #00A0DF; font-size: 16px; margin-top: 3px;">Distrito 22</p>
           </td>
         </tr>
@@ -92,12 +88,12 @@ function buildEmailBody(
       <div style="font-size: 14px; line-height: 1.6; color: #000; text-align: justify;">
         ${bodyHtml || '<p style="color: #999;"><em>(No se configuró una plantilla para este formulario en el panel de administrador).</em></p>'}
 
-        <!-- Firma -->
+        <!-- Extras de Firma -->
         ${signatureHtml}
-        <p style="margin-top: 20px; font-size: 12px; color: #666;">Correo del remitente: ${responses[FIXED_EMAIL_FIELD_ID] || 'No proporcionado'}</p>
       </div>
     </div>`;
 }
+
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 const FieldWrapper: React.FC<{ field: FormField; children: React.ReactNode }> = ({ field, children }) => (
@@ -187,15 +183,14 @@ const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validación early-return
-    const senderEmail = responses[FIXED_EMAIL_FIELD_ID]?.trim();
-    const senderName  = responses[FIXED_NAME_FIELD_ID]?.trim();
-    const congregation = responses[FIXED_CONGREGATION_FIELD_ID]?.trim();
+    const emailField = formTemplate.fields.find(f => f.type === 'email');
+    const senderEmail = emailField ? responses[emailField.id]?.trim() : 'no-reply@sepri.com';
     
-    if (!senderEmail || !senderName || !congregation) {
-      alert('Por favor complete los datos obligatorios del encabezado.');
-      return;
-    }
+    const nameField = formTemplate.fields.find(f => f.label.toLowerCase().includes('nombre') && !f.label.toLowerCase().includes('congregaci'));
+    const senderName = nameField ? responses[nameField.id]?.trim() : 'Administrador';
+
+    const congregationField = formTemplate.fields.find(f => f.label.toLowerCase().includes('congregaci'));
+    const congregation = congregationField ? responses[congregationField.id]?.trim() : 'IPUC';
 
     // Validar campos requeridos
     for (const field of formTemplate.fields) {
@@ -280,7 +275,7 @@ const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
               <AnimatePresence mode="wait">
 
                 {status === 'success' && (
-                  <SuccessScreen key="s" email={responses[FIXED_EMAIL_FIELD_ID] ?? ''} onClose={onClose} />
+                  <SuccessScreen key="s" email={responses[formTemplate.fields.find(f => f.type === 'email')?.id ?? ''] ?? ''} onClose={onClose} />
                 )}
 
                 {status === 'error' && (
@@ -297,44 +292,7 @@ const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
                       </p>
                     )}
 
-                    {/* ── Campos fijos: Congregación + Nombre + Correo ── */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2 sm:col-span-2">
-                        <label htmlFor="fixed-congregation" className={LABEL_BASE}>
-                          Nombre de la Congregación <span className="text-red-400">*</span>
-                        </label>
-                        <input id="fixed-congregation" type="text" required disabled={isLoading}
-                          className={INPUT_BASE}
-                          placeholder="Ej. IPUC Central, IPUC Norte..."
-                          value={responses[FIXED_CONGREGATION_FIELD_ID] ?? ''}
-                          onChange={e => updateResponse(FIXED_CONGREGATION_FIELD_ID, e.target.value)} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <label htmlFor="fixed-name" className={LABEL_BASE}>
-                          Nombre del Responsable <span className="text-red-400">*</span>
-                        </label>
-                        <input id="fixed-name" type="text" required disabled={isLoading}
-                          className={INPUT_BASE}
-                          placeholder="Nombre completo"
-                          value={responses[FIXED_NAME_FIELD_ID] ?? ''}
-                          onChange={e => updateResponse(FIXED_NAME_FIELD_ID, e.target.value)} />
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <label htmlFor="fixed-email" className={LABEL_BASE}>
-                          Correo Electrónico <span className="text-red-400">*</span>
-                        </label>
-                        <div className="relative">
-                          <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                          <input id="fixed-email" type="email" required disabled={isLoading}
-                            className={`${INPUT_BASE} pl-10`}
-                            placeholder="tucorreo@ejemplo.com"
-                            value={responses[FIXED_EMAIL_FIELD_ID] ?? ''}
-                            onChange={e => updateResponse(FIXED_EMAIL_FIELD_ID, e.target.value)} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ── Campos dinámicos configurados por el admin ── */}
+                    {/* ── Todos los campos son dinámicos ── */}
                     {formTemplate.fields.filter(f => f.type !== 'signature').length > 0 && (
                       <div className="grid grid-cols-2 gap-4">
                         {formTemplate.fields
@@ -399,7 +357,7 @@ const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
                       <div className="border-t pt-6 space-y-3">
                         <div className="flex items-center gap-2">
                           <PenLine size={16} className="text-sepri-medium" />
-                          <span className={LABEL_BASE} style={{ margin: 0 }}>Firma del Responsable</span>
+                          <span className={LABEL_BASE} style={{ margin: 0 }}>Firma del pastor</span>
                         </div>
                         <p className="text-xs text-gray-400">
                           Suba una fotografía o imagen de su firma manuscrita. Esta imagen se enviará
@@ -415,7 +373,7 @@ const DynamicFormModal: React.FC<DynamicFormModalProps> = ({
                             />
                             <div className="border-t-2 border-sepri-dark/30 mt-3 pt-2 text-center">
                               <p className="text-xs font-semibold text-gray-600">
-                                {responses[FIXED_NAME_FIELD_ID] || 'Nombre del responsable'}
+                                Firma registrada
                               </p>
                             </div>
                             <button

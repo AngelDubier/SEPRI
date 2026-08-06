@@ -794,7 +794,38 @@ const AdminLogin: React.FC = () => {
                 <p className="text-sm text-gray-500 mt-1">Crea y edita los campos de cada formulario por protocolo. Los usuarios diligencian estos formularios en línea.</p>
               </div>
               <button
-                onClick={() => setEditingFormTemplate({ id: `form-${Date.now()}`, eventId: selectedFormEventId, title: '', description: '', fields: [] })}
+                onClick={() => setEditingFormTemplate({ 
+                  id: `form-${Date.now()}`, 
+                  eventId: selectedFormEventId, 
+                  title: '', 
+                  description: '', 
+                  fields: [
+                    { id: `f-${Date.now()}-1`, label: 'Nombre de la Congregación', type: 'text', required: true },
+                    { id: `f-${Date.now()}-2`, label: 'Nombre del pastor', type: 'text', required: true },
+                    { id: `f-${Date.now()}-3`, label: 'Correo Electrónico', type: 'email', required: true },
+                    { id: `f-${Date.now()}-4`, label: 'Evento a realizar', type: 'text', required: true },
+                    { id: `f-${Date.now()}-5`, label: 'Fecha del programa', type: 'date', required: true },
+                    { id: `f-${Date.now()}-6`, label: 'Firma del pastor', type: 'signature', required: true }
+                  ],
+                  letterTemplate: `[Ciudad], {{Fecha del programa}}
+
+Hermanos Directivos.
+Distrito 22
+
+Asunto: Solicitud de autorización para {{Evento a realizar}}
+
+Cordial saludo, en el nombre del Señor Jesús.
+
+Respetuosamente me dirijo a ustedes con el fin de solicitarles la autorización para el evento {{Evento a realizar}}, que se va a realizar el día {{Fecha del programa}} en la congregación {{Nombre de la Congregación}} con un aforo estimado.
+
+En espera de una respuesta positiva a nuestra solicitud.
+
+Deseo que la gracia y la misericordia del Señor Jesús sea con cada uno y sus familias.
+
+Atentamente,
+{{Nombre del pastor}}
+Pastor / Directivo`
+                })}
                 className="bg-sepri-medium text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center gap-2 hover:bg-sepri-dark transition-all"
               >
                 <Plus size={16}/> Nueva Plantilla
@@ -945,25 +976,7 @@ const AdminLogin: React.FC = () => {
                       <textarea 
                         rows={18} 
                         className="w-full border p-4 rounded-xl text-sm outline-none resize-y font-serif leading-relaxed"
-                        placeholder={
-`Lugar y fecha: [se coloca automáticamente]
-
-Hermanos Directivos.
-Distrito 22
-
-Asunto: Solicitud de autorización para {{Nombre del evento}}
-
-Cordial saludo, en el nombre del Señor Jesús.
-
-Respetuosamente me dirijo a ustedes con el fin de solicitarles la autorización para el evento {{Nombre del evento}}, que se va a realizar el día {{Fecha del programa}} en la congregación {{Nombre de la congregacion}} con un aforo de {{Aforo}}.
-
-En espera de una respuesta positiva a nuestra solicitud.
-
-Deseo que la gracia y la misericordia del Señor Jesús sea con cada uno y sus familias.
-
-Atentamente,
-{{Nombre del Responsable}}
-Pastor / Directivo`}
+                        placeholder="Escribe el cuerpo de la carta aquí..."
                         value={editingFormTemplate.letterTemplate ?? ''}
                         onChange={e => setEditingFormTemplate({...editingFormTemplate, letterTemplate: e.target.value})}
                       />
@@ -977,23 +990,6 @@ Pastor / Directivo`}
                       <p className="text-[10px] text-gray-500 leading-tight">Haz clic para copiar e inserta en tu texto:</p>
                       
                       <div className="space-y-1.5 max-h-[250px] overflow-y-auto">
-                        <button 
-                          type="button"
-                          onClick={(e) => {
-                            navigator.clipboard.writeText('{{Nombre del Responsable}}');
-                            const btn = e.currentTarget;
-                            const original = btn.innerText;
-                            btn.innerText = '¡Copiado!';
-                            btn.classList.add('bg-sepri-medium', 'text-white');
-                            setTimeout(() => {
-                              btn.innerText = original;
-                              btn.classList.remove('bg-sepri-medium', 'text-white');
-                            }, 1000);
-                          }}
-                          className="w-full text-left bg-white border border-gray-200 p-2 rounded text-xs font-mono text-sepri-medium hover:bg-sepri-medium hover:text-white transition-colors"
-                        >
-                          {`{{Nombre del Responsable}}`}
-                        </button>
                         {(editingFormTemplate.fields ?? []).map(f => (
                           <button 
                             key={f.id}

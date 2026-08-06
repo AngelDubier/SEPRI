@@ -129,7 +129,7 @@ export const DEFAULT_FORMS = [
     title: 'Reporte de Novedades',
     description: 'Formulario para reportar incidentes menores durante el campamento.',
     fields: [
-      { id: 'f1', label: 'Nombre del Responsable', type: 'text' as const, required: true },
+      { id: 'f1', label: 'Nombre del pastor', type: 'text' as const, required: true },
       { id: 'f2', label: 'Descripción del suceso', type: 'textarea' as const, required: true },
       { id: 'f3', label: '¿Hubo lesionados?', type: 'checkbox' as const }
     ]
