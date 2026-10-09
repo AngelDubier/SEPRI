@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Lock, LogOut, Settings, Newspaper, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, User, Bell, Phone, Mail, MapPin, ArrowLeft, X, Eye, EyeOff, Shield, MessageSquare, BarChart2, Users, Clock, Download, Map as MapIcon, Calendar, Activity, ChevronDown, ClipboardList, GripVertical, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Lock, LogOut, Settings, Newspaper, FileText, Plus, Trash2, Edit2, Save, Image as ImageIcon, Briefcase, User, Bell, Phone, Mail, MapPin, ArrowLeft, X, Eye, EyeOff, Shield, MessageSquare, BarChart2, Users, Clock, Download, Map as MapIcon, Calendar, Activity, ChevronDown, ClipboardList, GripVertical, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DEFAULT_CONTACT_INFO } from '../constants';
-import { UserRole, NewsItem, EventType, ContactInfo, PopupConfig, QuickLink, TeamMember, Step, FormTemplate, FormField } from '../types';
-import { getNews, saveNews, getEvents, saveEvents, addEvent, deleteEvent, getContactInfo, saveContactInfo, authenticateUser, getPopups, savePopups, getQuickLinks, saveQuickLinks, getAnalytics, getForms, saveForms, AnalyticsRecord } from '../services/dataService';
+import { UserRole, NewsItem, EventType, ContactInfo, PopupConfig, QuickLink, TeamMember, Step, FormTemplate, FormField, Question } from '../types';
+import { getNews, saveNews, getEvents, saveEvents, addEvent, deleteEvent, getContactInfo, saveContactInfo, authenticateUser, verifySessionToken, logoutSessionToken, getPopups, savePopups, getQuickLinks, saveQuickLinks, getAnalytics, getForms, saveForms, AnalyticsRecord } from '../services/dataService';
 import { Button as MovingBorderButton } from '../components/ui/moving-border';
+import { AdminSidebar, AdminTab } from '../components/admin/AdminSidebar';
+import { AdminLoadingState, AdminErrorState, AdminEmptyState } from '../components/admin/AdminStates';
 
 const compressImage = (base64Str: string, maxWidth = 800, maxHeight = 600): Promise<string> => {
   return new Promise((resolve) => {
@@ -152,41 +154,85 @@ const AdminLogin: React.FC = () => {
 
   const COLORS = ['#164E87', '#FFB000', '#2ECC71', '#E74C3C', '#9B59B6'];
 
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+  const [adminName, setAdminName] = useState<string>('SEPRI Admin');
+
+  // Verificación de token seguro al montar el componente
   useEffect(() => {
-    const storedRole = localStorage.getItem('sepri_user_role');
-    if (storedRole && (storedRole === 'ADMIN' || storedRole === 'CREATOR')) {
-      setIsLoggedIn(true);
-      setCurrentRole(storedRole as UserRole);
-      loadData();
-    }
+    let isMounted = true;
+    const checkActiveSession = async () => {
+      try {
+        const verified = await verifySessionToken();
+        if (verified && isMounted) {
+          setIsLoggedIn(true);
+          setCurrentRole(verified.role);
+          setAdminName(verified.role === 'CREATOR' ? 'Creador Sistema' : 'SEPRI Admin');
+          loadData();
+        } else if (isMounted) {
+          setIsLoggedIn(false);
+        }
+      } catch (err) {
+        if (isMounted) setIsLoggedIn(false);
+      }
+    };
+    checkActiveSession();
+
+    return () => { isMounted = false; };
   }, []);
 
   const loadData = async () => {
-    setNews(await getNews());
-    setEvents(await getEvents());
-    setPopups(await getPopups());
-    setQuickLinks(await getQuickLinks());
-    setAnalyticsData(await getAnalytics());
-    setForms(await getForms());
-    const contact = await getContactInfo();
-    if(contact) setContactInfo(contact);
+    setIsLoadingData(true);
+    setLoadError(null);
+    try {
+      const [n, ev, pop, ql, an, fm, ct] = await Promise.all([
+        getNews(),
+        getEvents(),
+        getPopups(),
+        getQuickLinks(),
+        getAnalytics(),
+        getForms(),
+        getContactInfo()
+      ]);
+      setNews(n || []);
+      setEvents(ev || []);
+      setPopups(pop || []);
+      setQuickLinks(ql || []);
+      setAnalyticsData(an || []);
+      setForms(fm || []);
+      if (ct) setContactInfo(ct);
+    } catch (err: any) {
+      console.error("Error al cargar datos del panel:", err);
+      setLoadError("No fue posible sincronizar los datos con el servidor. Por favor verifica tu conexión y reintenta.");
+    } finally {
+      setIsLoadingData(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const role = await authenticateUser(email, password);
-    if (role) {
-        localStorage.setItem('sepri_user_role', role);
-        setCurrentRole(role);
+    setIsLoggingIn(true);
+    try {
+      const authResult = await authenticateUser(email, password);
+      if (authResult) {
+        setCurrentRole(authResult.role);
+        setAdminName(authResult.name || (authResult.role === 'CREATOR' ? 'Creador Sistema' : 'SEPRI Admin'));
         setIsLoggedIn(true);
         loadData();
-    } else {
+      } else {
         alert("Credenciales incorrectas.");
+      }
+    } catch (err) {
+      alert("Error al intentar iniciar sesión.");
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('sepri_user_role');
+  const handleLogout = async () => {
+    // Invalida el token en el servidor para que jamás pueda volver a ser reutilizado
+    await logoutSessionToken();
     setIsLoggedIn(false);
     navigate('/');
   };
@@ -420,6 +466,35 @@ const AdminLogin: React.FC = () => {
     });
   };
 
+  const handleAddQuestionToProtocol = () => {
+    const newQuestion: Question = {
+      id: `q-${Date.now()}`,
+      text: '',
+      triggerSteps: [],
+      isEnabled: true,
+      yesContent: '',
+      noContent: ''
+    };
+    setCurrentProtocol(prev => ({
+      ...prev,
+      questions: [...(prev.questions || []), newQuestion]
+    }));
+  };
+
+  const handleRemoveQuestion = (id: string) => {
+    setCurrentProtocol(prev => ({
+      ...prev,
+      questions: prev.questions?.filter(q => q.id !== id)
+    }));
+  };
+
+  const handleUpdateQuestion = (id: string, field: keyof Question, value: any) => {
+    setCurrentProtocol(prev => ({
+      ...prev,
+      questions: prev.questions?.map(q => q.id === id ? { ...q, [field]: value } : q)
+    }));
+  };
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-sepri-dark flex flex-col items-center justify-center p-4 relative">
@@ -455,23 +530,43 @@ const AdminLogin: React.FC = () => {
 
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
-      <div className="w-64 bg-sepri-dark text-white p-6 hidden md:block flex-shrink-0 h-full overflow-y-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <Settings className="text-sepri-yellow" />
-          <h1 className="font-bold text-lg">Panel SEPRI</h1>
-        </div>
-        <nav className="space-y-2">
-          <button onClick={() => setActiveTab('dashboard')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'dashboard' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><BarChart2 size={18} /> Panel Principal</button>
-          <button onClick={() => setActiveTab('news')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'news' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><Newspaper size={18} /> Noticias</button>
-          <button onClick={() => setActiveTab('protocols')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'protocols' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><Briefcase size={18} /> Protocolos</button>
-          <button onClick={() => setActiveTab('forms')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'forms' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><ClipboardList size={18} /> Formularios</button>
-          <button onClick={() => setActiveTab('config')} className={`w-full text-left p-3 rounded flex items-center gap-3 ${activeTab === 'config' ? 'bg-sepri-medium' : 'hover:bg-gray-800'}`}><Settings size={18} /> Configuración</button>
-        </nav>
-        <button onClick={handleLogout} className="mt-8 text-red-400 flex items-center gap-2 hover:text-red-300 px-3"><LogOut size={18} /> Salir</button>
-      </div>
+      {/* ── SIDEBAR MEJORADO COMPONENTIZADO (DISEÑO ÁRBOL Y ESTADOS) ── */}
+      <AdminSidebar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onLogout={handleLogout}
+        userName={adminName}
+        userRole={currentRole === 'CREATOR' ? 'Super Admin' : 'Distrito 22'}
+        newsCount={news.length}
+        protocolsCount={events.length}
+        formsCount={forms.length}
+        protocols={events}
+        onSelectProtocol={(p) => {
+          setCurrentProtocol(p);
+          setIsEditingProtocol(true);
+        }}
+        onQuickNewProtocol={() => {
+          setActiveTab('protocols');
+          setCurrentProtocol({ baseSteps: [], questions: [], alerts: [] });
+          setIsEditingProtocol(true);
+        }}
+      />
 
-      <div className="flex-1 p-8 overflow-y-auto h-full bg-gray-50">
-        {activeTab === 'dashboard' && (
+      {/* ── CONTENIDO PRINCIPAL CON MANEJO DE ESTADOS DEFENSIVOS ── */}
+      <div className="flex-1 p-6 md:p-8 overflow-y-auto h-full bg-gray-50">
+        {loadError && (
+          <AdminErrorState
+            title="Error al sincronizar datos"
+            message={loadError}
+            onRetry={loadData}
+          />
+        )}
+
+        {isLoadingData ? (
+          <AdminLoadingState message="Cargando información del panel administrativo..." />
+        ) : (
+          <>
+            {activeTab === 'dashboard' && (
           <div className="space-y-6 pb-24">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
               <div>
@@ -680,6 +775,14 @@ const AdminLogin: React.FC = () => {
                  </div>
               </form>
             )}
+            {news.length === 0 && !isEditingNews && (
+              <AdminEmptyState
+                title="No hay noticias publicadas"
+                description="Redacta comunicados oficiales, convocatorias o novedades para que aparezcan en el portal principal de SEPRI."
+                actionText="+ Nueva Noticia"
+                onAction={() => { setCurrentNews({}); setIsEditingNews(true); }}
+              />
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                {news.map(n => (
                  <div key={n.id} className="bg-white p-4 rounded-xl border flex gap-4 items-center group hover:border-sepri-medium transition-colors">
@@ -765,11 +868,121 @@ const AdminLogin: React.FC = () => {
                        ))}
                     </div>
                   </div>
+
+                  {/* ── Contexto del Evento (Preguntas Sí/No) ── */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex justify-between items-start">
+                       <div>
+                          <h3 className="font-black text-sepri-dark uppercase tracking-tight text-sm flex items-center gap-2">
+                            <AlertCircle size={16} className="text-sepri-yellow" /> Preguntas de Contexto ("CONTEXTO DEL EVENTO")
+                          </h3>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            Preguntas interactivas (SÍ / NO) que se mostrarán en la columna lateral del protocolo para los usuarios.
+                          </p>
+                       </div>
+                       <button
+                         type="button"
+                         onClick={handleAddQuestionToProtocol}
+                         className="text-sepri-medium flex items-center gap-1 text-xs font-bold hover:text-sepri-dark transition-colors"
+                       >
+                         <Plus size={14}/> Agregar Pregunta
+                       </button>
+                    </div>
+
+                    {(!currentProtocol.questions || currentProtocol.questions.length === 0) && (
+                      <div className="p-6 border border-dashed rounded-xl bg-gray-50 text-center text-xs text-gray-400">
+                        No hay preguntas de contexto configuradas. Haz clic en "+ Agregar Pregunta" para crear una.
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                       {currentProtocol.questions?.map((q, qIdx) => (
+                         <div key={q.id} className="p-4 border rounded-xl bg-gray-50 flex flex-col gap-3">
+                            <div className="flex items-center gap-3">
+                               <span className="text-xs font-mono font-bold text-gray-400 bg-gray-200 px-2 py-0.5 rounded">
+                                 #{qIdx + 1}
+                                </span>
+                               <input
+                                 type="text"
+                                 placeholder="Ej: ¿Se manipularán alimentos en el sitio?"
+                                 className="flex-1 border p-2 rounded text-sm outline-none bg-white font-medium"
+                                 value={q.text || ''}
+                                 onChange={e => handleUpdateQuestion(q.id, 'text', e.target.value)}
+                               />
+                               <button
+                                 type="button"
+                                 onClick={() => handleRemoveQuestion(q.id)}
+                                 className="text-red-400 p-2 hover:bg-red-50 rounded transition-colors"
+                                 title="Eliminar pregunta"
+                               >
+                                 <Trash2 size={16}/>
+                               </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-gray-200/60">
+                               <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-gray-400">
+                                    Texto / Información al responder SÍ (opcional)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder="Ej: Recuerda anexar el certificado de manipulación..."
+                                    className="w-full border p-2 rounded text-xs outline-none bg-white"
+                                    value={q.yesContent || ''}
+                                    onChange={e => handleUpdateQuestion(q.id, 'yesContent', e.target.value)}
+                                  />
+                               </div>
+                               <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-gray-400">
+                                    Texto / Información al responder NO (opcional)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder="Ej: No aplica este requisito para su evento..."
+                                    className="w-full border p-2 rounded text-xs outline-none bg-white"
+                                    value={q.noContent || ''}
+                                    onChange={e => handleUpdateQuestion(q.id, 'noContent', e.target.value)}
+                                  />
+                               </div>
+                            </div>
+
+                            <div className="space-y-1 pt-1">
+                               <label className="text-[10px] font-black uppercase text-gray-400">
+                                 Paso de cumplimiento adicional que activa si responde SÍ (opcional)
+                               </label>
+                               <select
+                                 className="w-full border p-2 rounded text-xs outline-none bg-white"
+                                 value={q.triggerSteps?.[0] || ''}
+                                 onChange={e => {
+                                   const selected = e.target.value;
+                                   handleUpdateQuestion(q.id, 'triggerSteps', selected ? [selected] : []);
+                                 }}
+                               >
+                                 <option value="">Ninguno (solo pregunta de contexto informativo)</option>
+                                 <option value="cert-manipulacion">Curso de Manipulación de Alimentos (cert-manipulacion)</option>
+                                 <option value="salvavidas">Certificado Salvavidas para Piscina (salvavidas)</option>
+                                 <option value="rut-empresa">RUT de Empresa de Transporte (rut-empresa)</option>
+                                 <option value="poliza-contractual">Póliza Contractual de Transporte (poliza-contractual)</option>
+                                 <option value="poliza-extra">Póliza Extracontractual para Eventos Masivos (poliza-extra)</option>
+                               </select>
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                  </div>
                   <div className="flex gap-4 pt-6 border-t">
                      <button onClick={handleSaveProtocol} className="bg-sepri-medium text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">Guardar Protocolo</button>
                      <button onClick={() => setIsEditingProtocol(false)} className="px-6 py-3 text-gray-500 font-bold text-xs">Cancelar</button>
                   </div>
                </div>
+            )}
+            {events.length === 0 && !isEditingProtocol && (
+              <AdminEmptyState
+                title="No hay protocolos registrados"
+                description="Crea protocolos de seguridad y prevención para guiar los eventos y actividades del distrito."
+                actionText="+ Nuevo Protocolo"
+                onAction={() => { setCurrentProtocol({ baseSteps: [], questions: [], alerts: [] }); setIsEditingProtocol(true); }}
+              />
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                {events.map(event => (
@@ -1087,10 +1300,27 @@ Pastor / Directivo`
                 })}
 
               {forms.filter(f => !selectedFormEventId || f.eventId === selectedFormEventId).length === 0 && (
-                <div className="col-span-2 text-center py-16 text-gray-400">
-                  <ClipboardList size={40} className="mx-auto mb-3 opacity-30" />
-                  <p className="font-bold">No hay formularios creados aún.</p>
-                  <p className="text-sm">Haz clic en "Nueva Plantilla" para crear el primero.</p>
+                <div className="col-span-2">
+                  <AdminEmptyState
+                    icon={<ClipboardList size={28} className="text-sepri-medium" />}
+                    title="No hay formularios creados"
+                    description={selectedFormEventId ? "No hay formularios asociados a este protocolo. Crea uno nuevo para comenzar." : "No hay formularios configurados aún. Haz clic en 'Nueva Plantilla' para crear el primero."}
+                    actionText="+ Nueva Plantilla"
+                    onAction={() => setEditingFormTemplate({
+                      id: `form-${Date.now()}`,
+                      eventId: selectedFormEventId,
+                      title: '',
+                      description: '',
+                      fields: [
+                        { id: `f-${Date.now()}-1`, label: 'Nombre de la Congregación', type: 'text', required: true },
+                        { id: `f-${Date.now()}-2`, label: 'Nombre del pastor', type: 'text', required: true },
+                        { id: `f-${Date.now()}-3`, label: 'Correo Electrónico', type: 'email', required: true },
+                        { id: `f-${Date.now()}-4`, label: 'Evento a realizar', type: 'text', required: true },
+                        { id: `f-${Date.now()}-5`, label: 'Fecha del programa', type: 'date', required: true },
+                        { id: `f-${Date.now()}-6`, label: 'Firma del pastor', type: 'signature', required: true }
+                      ]
+                    })}
+                  />
                 </div>
               )}
             </div>
@@ -1312,6 +1542,8 @@ Pastor / Directivo`
                <MovingBorderButton as="button" onClick={handleSaveConfig} borderRadius="3rem" containerClassName="w-full max-w-lg h-20" className="bg-green-600 text-white font-black text-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-3 shadow-2xl"><Save size={28} /> GUARDAR TODA LA CONFIGURACIÓN</MovingBorderButton>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

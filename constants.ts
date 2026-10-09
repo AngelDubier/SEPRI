@@ -9,14 +9,12 @@ export const NEWS_CAROUSEL_INTERVAL = 5000;
 
 export const ADMIN_CREDENTIALS = {
   username: 'distrito22a@ipuc.org.co',
-  password: 'S3cur3#Admin!2025', 
   role: 'ADMIN' as const
 };
 
 // CREATOR_CREDENTIALS for the system creator role as used in dataService.ts
 export const CREATOR_CREDENTIALS = {
   username: 'sepri.creator@ipuc.org.co',
-  password: 'System#Creator!2025',
   role: 'CREATOR' as const
 };
 

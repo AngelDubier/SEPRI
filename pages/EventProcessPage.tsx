@@ -39,8 +39,8 @@ const EventProcessPage: React.FC = () => {
     let steps = [...event.baseSteps];
     Object.keys(answers).forEach((questionId) => {
       if (answers[questionId]) {
-        const question = event.questions.find(q => q.id === questionId);
-        if (question) {
+        const question = (event.questions || []).find(q => q.id === questionId);
+        if (question && question.triggerSteps) {
           question.triggerSteps.forEach(stepId => {
             if (EXTRA_STEPS[stepId] && !steps.find(s => s.id === stepId)) {
               const extraStep = { ...EXTRA_STEPS[stepId], order: 99 } as Step;
@@ -142,42 +142,44 @@ const EventProcessPage: React.FC = () => {
       <div className="container mx-auto px-4 -mt-12 relative z-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
-              <h2 className="text-lg font-black text-sepri-dark mb-6 flex items-center gap-2"><AlertCircle className="text-sepri-yellow" size={24} /> CONTEXTO DEL EVENTO</h2>
-              <div className="space-y-6">
-                {event.questions.map((q) => {
-                  const answered = answers[q.id] !== undefined;
-                  const value = answers[q.id];
-                  const rama = value === true ? 'yes' : 'no';
-                  const content = value === true ? q.yesContent : q.noContent;
-                  const formats = value === true ? q.yesFormats : q.noFormats;
+            {event.questions && event.questions.length > 0 && (
+              <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
+                <h2 className="text-lg font-black text-sepri-dark mb-6 flex items-center gap-2"><AlertCircle className="text-sepri-yellow" size={24} /> CONTEXTO DEL EVENTO</h2>
+                <div className="space-y-6">
+                  {event.questions.map((q) => {
+                    const answered = answers[q.id] !== undefined;
+                    const value = answers[q.id];
+                    const rama = value === true ? 'yes' : 'no';
+                    const content = value === true ? q.yesContent : q.noContent;
+                    const formats = value === true ? q.yesFormats : q.noFormats;
 
-                  return (
-                    <div key={q.id} className="p-5 border border-gray-100 rounded-2xl bg-gray-50/50 space-y-4">
-                      <p className="font-bold text-gray-700 text-sm leading-snug">{q.text}</p>
-                      <div className="flex gap-3">
-                        <button onClick={() => handleAnswer(q.id, true)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${value === true ? 'bg-sepri-medium text-white shadow-lg' : 'bg-white border text-gray-500'}`}>SÍ</button>
-                        <button onClick={() => handleAnswer(q.id, false)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${value === false ? 'bg-sepri-dark text-white shadow-lg' : 'bg-white border text-gray-500'}`}>NO</button>
-                      </div>
-                      {answered && (content || (formats && formats.length > 0)) && (
-                        <div className="pt-4 border-t border-gray-200 mt-2 animate-fade-in space-y-3">
-                          {content && <p className="text-xs text-gray-600 leading-relaxed italic">{content}</p>}
-                          {formats && formats.length > 0 && (
-                            <div className="space-y-2">
-                              {formats.map(f => (
-                                <button key={f.id} onClick={() => window.open(f.url, '_blank')} className="w-full flex items-center justify-between p-3 bg-white border border-sepri-medium/20 rounded-xl text-[10px] font-black uppercase text-sepri-medium hover:bg-sepri-medium hover:text-white transition-all">
-                                  {f.name || 'DESCARGAR FORMATO'} <Download size={14}/>
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                    return (
+                      <div key={q.id} className="p-5 border border-gray-100 rounded-2xl bg-gray-50/50 space-y-4">
+                        <p className="font-bold text-gray-700 text-sm leading-snug">{q.text}</p>
+                        <div className="flex gap-3">
+                          <button onClick={() => handleAnswer(q.id, true)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${value === true ? 'bg-sepri-medium text-white shadow-lg' : 'bg-white border text-gray-500'}`}>SÍ</button>
+                          <button onClick={() => handleAnswer(q.id, false)} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${value === false ? 'bg-sepri-dark text-white shadow-lg' : 'bg-white border text-gray-500'}`}>NO</button>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        {answered && (content || (formats && formats.length > 0)) && (
+                          <div className="pt-4 border-t border-gray-200 mt-2 animate-fade-in space-y-3">
+                            {content && <p className="text-xs text-gray-600 leading-relaxed italic">{content}</p>}
+                            {formats && formats.length > 0 && (
+                              <div className="space-y-2">
+                                {formats.map(f => (
+                                  <button key={f.id} onClick={() => window.open(f.url, '_blank')} className="w-full flex items-center justify-between p-3 bg-white border border-sepri-medium/20 rounded-xl text-[10px] font-black uppercase text-sepri-medium hover:bg-sepri-medium hover:text-white transition-all">
+                                    {f.name || 'DESCARGAR FORMATO'} <Download size={14}/>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
             {availableForms.length > 0 && (
               <div className="bg-sepri-medium text-white rounded-3xl shadow-2xl p-8">
                  <h2 className="text-lg font-black mb-6 flex items-center gap-2"><FileText className="text-sepri-yellow" size={24} /> FORMULARIOS</h2>

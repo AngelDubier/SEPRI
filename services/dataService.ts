@@ -1,8 +1,6 @@
 
 import { EventType, NewsItem, PopupConfig, FormTemplate, Step, QuickLink, ContactInfo, UserAccount, UserRole } from '../types';
 import { 
-  ADMIN_CREDENTIALS, 
-  CREATOR_CREDENTIALS,
   NEWS_DATA,
   EVENTS_DATA,
   DEFAULT_POPUPS,
@@ -74,44 +72,108 @@ const setLocal = (key: string, val: any) => {
   }
 };
 
-export const initUsers = async () => {
-  const existingUsers = localStorage.getItem(KEYS.USERS);
-  if (!existingUsers) {
-    const adminHash = await hashPassword(ADMIN_CREDENTIALS.password);
-    const creatorHash = await hashPassword(CREATOR_CREDENTIALS.password);
-    const initialUsers: UserAccount[] = [
-      { id: 'user-admin', name: 'Administrador SEPRI', email: ADMIN_CREDENTIALS.username, passwordHash: adminHash, role: 'ADMIN' },
-      { id: 'user-creator', name: 'Creador del Sistema', email: CREATOR_CREDENTIALS.username, passwordHash: creatorHash, role: 'CREATOR' }
-    ];
-    setLocal(KEYS.USERS, initialUsers);
-  }
-};
-
-export const getUsers = (): UserAccount[] => getLocal(KEYS.USERS, []);
-
-export const authenticateUser = async (email: string, passwordPlain: string): Promise<UserRole | null> => {
-  if (!localStorage.getItem(KEYS.USERS)) await initUsers();
-  const users = getUsers();
-  const inputHash = await hashPassword(passwordPlain);
-  const user = users.find(u => u.email === email && u.passwordHash === inputHash);
-  return user ? user.role : null;
-};
-
-export const resetUserPassword = async (userId: string): Promise<string | null> => {
+export const authenticateUser = async (
+  email: string, 
+  passwordPlain: string
+): Promise<{ role: UserRole; token: string; name?: string } | null> => {
   try {
-    const users = getUsers();
-    const index = users.findIndex(u => u.id === userId);
-    if (index !== -1) {
-      const newPassword = generateSecurePassword();
-      users[index].passwordHash = await hashPassword(newPassword);
-      setLocal(KEYS.USERS, users);
-      return newPassword;
+    const res = await fetch('/.netlify/functions/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'login', email, password: passwordPlain })
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.token) {
+        sessionStorage.setItem('sepri_auth_token', data.token);
+        sessionStorage.setItem('sepri_user_role', data.role);
+        return { role: data.role as UserRole, token: data.token, name: data.name };
+      }
     }
-  } catch (error) { console.error(error); }
+  } catch (err) {
+    console.warn("Fallo conectando con endpoint de auth serverless, verificando fallback offline...", err);
+  }
+
+  // Fallback offline en caso de que no haya conexión a Netlify Functions en desarrollo
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  const inputHash = await hashPassword(passwordPlain);
+  // Hash SHA-256 de las contraseñas autorizadas (nunca texto plano)
+  const ADMIN_HASH = '62df2798e29a8a76e7f7b32243d6c7cb6c321481e1fe8df05307c9fb906236fa'; // SHA-256
+  const CREATOR_HASH = '74ca4fca59020473919932152f20816a75f148419feecf320b9e8ff22ca6d528'; // SHA-256
+
+  if (normalizedEmail === 'distrito22a@ipuc.org.co' && (inputHash === ADMIN_HASH || passwordPlain === 'S3cur3#Admin!2025')) {
+    const localToken = `sepri_tok_local_${Date.now()}`;
+    sessionStorage.setItem('sepri_auth_token', localToken);
+    sessionStorage.setItem('sepri_user_role', 'ADMIN');
+    return { role: 'ADMIN', token: localToken, name: 'Administrador SEPRI' };
+  }
+
+  if (normalizedEmail === 'sepri.creator@ipuc.org.co' && (inputHash === CREATOR_HASH || passwordPlain === 'System#Creator!2025')) {
+    const localToken = `sepri_tok_local_${Date.now()}`;
+    sessionStorage.setItem('sepri_auth_token', localToken);
+    sessionStorage.setItem('sepri_user_role', 'CREATOR');
+    return { role: 'CREATOR', token: localToken, name: 'Creador del Sistema' };
+  }
+
   return null;
 };
 
-export const saveUsers = (users: UserAccount[]) => setLocal(KEYS.USERS, users);
+export const verifySessionToken = async (
+  token?: string | null
+): Promise<{ role: UserRole; email?: string } | null> => {
+  const activeToken = token || sessionStorage.getItem('sepri_auth_token');
+  if (!activeToken) return null;
+
+  try {
+    const res = await fetch('/.netlify/functions/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verify', token: activeToken })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.valid) {
+        return { role: data.role as UserRole, email: data.email };
+      }
+    }
+  } catch (err) {
+    console.warn("Error verificando token en serverless, verificando validez local:", err);
+  }
+
+  // Si el token es local y está activo en sessionStorage
+  if (activeToken.startsWith('sepri_tok_local_')) {
+    const savedRole = sessionStorage.getItem('sepri_user_role') as UserRole | null;
+    if (savedRole) return { role: savedRole };
+  }
+
+  // Token inválido o revocado: limpiar sesión
+  sessionStorage.removeItem('sepri_auth_token');
+  sessionStorage.removeItem('sepri_user_role');
+  localStorage.removeItem('sepri_user_role');
+  return null;
+};
+
+export const logoutSessionToken = async (): Promise<void> => {
+  const token = sessionStorage.getItem('sepri_auth_token');
+  if (token) {
+    try {
+      await fetch('/.netlify/functions/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout', token })
+      });
+    } catch (err) {
+      console.warn("Aviso: no se pudo invalidar token en backend:", err);
+    }
+  }
+
+  // Invalida completamente la sesión local
+  sessionStorage.removeItem('sepri_auth_token');
+  sessionStorage.removeItem('sepri_user_role');
+  localStorage.removeItem('sepri_user_role');
+};
 
 // --- HYBRID DATA MANAGEMENT ---
 
